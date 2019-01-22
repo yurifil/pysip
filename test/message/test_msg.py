@@ -30,6 +30,22 @@ resp_msg = b"SIP/2.0 200 OK" \
            b"\r\n\r\nTest"
 
 
+def default_sip_msg():
+    msg = b"INVITE sip:bob@biloxi.com SIP/2.0"\
+          b"\r\nVia: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bK776asdhds"\
+          b"\r\nVia: SIP/2.0/UDP bigbox3.site3.atlanta.com"\
+          b"\r\nMax-Forwards: 70"\
+          b"\r\nTo: Bob <sip:bob@biloxi.com>"\
+          b"\r\nFrom: Alice <sip:alice@atlanta.com>;tag=1928301774"\
+          b"\r\nCall-ID: a84b4c76e66710@pc33.atlanta.com"\
+          b"\r\nCSeq: 314159 INVITE"\
+          b"\r\nContact: <sip:alice@pc33.atlanta.com>"\
+          b"\r\nContent-Type: application/sdp"\
+          b"\r\nContent-Length: 4"\
+          b"\r\n\r\nTest"
+    return parse(msg)
+
+
 def test_clear_headers():
     msg = SipMsg()
     msg.method = sip_method.invite()
@@ -359,4 +375,20 @@ def test_get_parts():
     ?assertEqual(undefined, ersip_sipmsg:status(SipMsg)),
     ?assertEqual(undefined, ersip_sipmsg:reason(SipMsg)),
     ?assertEqual({method, <<"INVITE">>}, ersip_sipmsg:method(SipMsg)),
+    ok.'''
+
+
+def test_set_ruri():
+    sip_msg = default_sip_msg()
+    ruri_bin = b'"sip:alice@atlanta.com"'
+    assert sip_msg.ruri == 0
+
+    '''
+    SipMsg0 = default_sipmsg(),
+    RURIBin = <<"sip:alice@atlanta.com">>,
+    RURI = ersip_uri:make(RURIBin),
+    SipMsg1 = ersip_sipmsg:set_ruri(RURI, SipMsg0),
+    ?assertEqual(RURI, ersip_sipmsg:ruri(SipMsg1)),
+    SipMsg2 = rebuild_sipmsg(SipMsg1),
+    ?assertEqual(RURI, ersip_sipmsg:ruri(SipMsg2)),
     ok.'''

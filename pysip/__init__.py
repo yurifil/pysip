@@ -1,6 +1,7 @@
 
 FINAL = 'final'
 PROVISIONAL = 'provisional'
+KNOWN_TRANSPORT = ('tcp', 'udp', 'tls', 'wss', 'ws')
 
 
 class PySIPException(Exception):
