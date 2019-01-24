@@ -1,4 +1,4 @@
-import ipaddress
+from pysip.binary import to_integer
 from pysip import KNOWN_TRANSPORT
 from uritools.encoding import uridecode
 import re
@@ -36,7 +36,7 @@ class SIPUriParser(object):
         raise NotImplementedError
 
     def _decode_int(self, val):
-        raise NotImplementedError
+        return to_integer(val)
 
     def _is_valid_user(self, user):
         symbols = iter(user)
@@ -355,9 +355,6 @@ class SIPUriParserUnicode(SIPUriParser):
     def _normalize(self, char):
         return char
 
-    def _decode_int(self, val):
-        return int(val)
-
     def _unquote(self, quoted_str):
         return unquote(quoted_str, self.ENCODING)
 
@@ -413,9 +410,6 @@ class SIPUriParserBytes(SIPUriParser):
         if isinstance(char, int):
             return bytes([char])
         return char
-
-    def _decode_int(self, val):
-        return int(val.decode())
 
     def _unquote(self, quoted_str):
         return unquote_to_bytes(quoted_str)

@@ -1,4 +1,5 @@
 from collections import namedtuple
+from pysip.binary import to_lower
 
 FROM_HEADER = 'from'
 TO_HEADER = 'to'
@@ -94,14 +95,12 @@ ALL_KNOWN_HEADERS = ['from',
 def make_key(header):
     if isinstance(header, HeaderKey):
         return header
-    elif isinstance(header, bytes):
+    elif isinstance(header, (bytes, str)):
         return HeaderKey(compact_form(header))
-    elif isinstance(header, str):
-        return KNOWN_HEADER_KEY_MAP.get(header)
 
 
 def compact_form(header):
-    return COMPACT_FORM_MAP.get(header.lower(), header.lower())
+    return COMPACT_FORM_MAP.get(to_lower(header), to_lower(header))
 
 
 def print_form(header):
@@ -110,3 +109,24 @@ def print_form(header):
 
 def known_header_form(header):
     return KNOWN_HEADER_KEY_MAP.get(make_key(header))
+
+'''
+
+
+
+
+may_have_multiple_values({hdr_key, <<"accept-encoding">>}) ->
+    true;
+may_have_multiple_values({hdr_key, <<"accept-language">>}) ->
+    true;
+may_have_multiple_values({hdr_key, <<"www-authenticate">>}) ->
+    true; %% WWW-Authenticate may have multiple values but they cannot be comma seprated.
+may_have_multiple_values({hdr_key, <<"authorization">>}) ->
+    true; %% Authorization may have multiple values but they cannot be comma seprated...
+may_have_multiple_values({hdr_key, <<"proxy-authenticate">>}) ->
+    true; %% Proxy-Authenticate may have multiple values but they cannot be comma seprated.
+may_have_multiple_values({hdr_key, <<"proxy-authorization">>}) ->
+    true; %% Proxy-Authorization may have multiple values but they cannot be comma seprated.
+may_have_multiple_values(_) ->
+    false.
+'''
