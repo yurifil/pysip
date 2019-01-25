@@ -1,4 +1,5 @@
 from collections import namedtuple
+from pysip.binary import to_string
 from pysip import PySIPException
 #from pysip.message.parser_aux import check_token
 
@@ -10,6 +11,34 @@ ACK = Method(b'ACK')
 BYE = Method(b'BYE')
 CANCEL = Method(b'CANCEL')
 REGISTER = Method(b'REGISTER')
+
+TOKEN_CHARS = "-.!%*_+`'~"
+
+
+class MethodError(PySIPException):
+    pass
+
+
+class Method(object):
+    def __init__(self, method):
+        self.method = to_string(method)
+        if not self._is_valid_token(self.method):
+            raise MethodError(f'Cannot parse method {self.method}: not a valid token.')
+
+    def __repr__(self):
+        return self.method
+
+    @staticmethod
+    def _is_valid_token(string):
+        if not string:
+            return False
+        symbols = iter(string)
+        for sym in symbols:
+            if sym.isalnum() or sym in TOKEN_CHARS:
+                continue
+            else:
+                return False
+        return True
 
 
 def options():

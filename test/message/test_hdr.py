@@ -63,42 +63,43 @@ def test_allow_empty():
     assert b'A: B' == h.serialize_to_bytes(append_value=b'A: B')
 
 
-def test_no_split_exceptions():
+def test_no_split_authenticate():
     h = Header(b'WWW-Authenticate')
     h.add_value(b'"Digest realm="atlanta.com", domain="sip:boxesbybob.com", qop="auth", '
                 b'nonce="f84f1cec41e6cbe5aea9c8e88d359", opaque="", stale=FALSE, algorithm=MD5"')
     assert b'"Digest realm="atlanta.com", domain="sip:boxesbybob.com", qop="auth", ' \
            b'nonce="f84f1cec41e6cbe5aea9c8e88d359", opaque="", stale=FALSE, algorithm=MD5"' == to_bytes(h.values[0])
 
+
+def test_no_split_authorization():
+    h = Header(b'Authorization')
+    h.add_value(b'Digest username="Alice", realm="atlanta.com",'
+                b' nonce="84a4cc6f3082121f32b42a2187831a9e",'
+                b' response="7587245234b3434cc3412213e5f113a5432"')
+    assert b'Digest username="Alice", realm="atlanta.com",' \
+           b' nonce="84a4cc6f3082121f32b42a2187831a9e",' \
+           b' response="7587245234b3434cc3412213e5f113a5432"' == to_bytes(h.values[0])
+
+
+def test_no_split_proxy_authenticate():
+    h = Header(b'Proxy-Authenticate')
+    h.add_value(b'Digest realm="atlanta.com",'
+                b' domain="sip:ss1.carrier.com", qop="auth",'
+                b' nonce="f84f1cec41e6cbe5aea9c8e88d359",'
+                b' opaque="", stale=FALSE, algorithm=MD5')
+    assert b'Digest realm="atlanta.com",' \
+           b' domain="sip:ss1.carrier.com", qop="auth",' \
+           b' nonce="f84f1cec41e6cbe5aea9c8e88d359",' \
+           b' opaque="", stale=FALSE, algorithm=MD5' == to_bytes(h.values[0])
+
+
+def test_name():
+    assert 'Allow' == Header(b'Allow').name
+
 '''
-no_split_exceptions_test() ->
-    %% The exceptions to this rule are the WWW-Authenticate,
-    %% Authorization, Proxy-Authenticate, and Proxy-Authorization
-    %% header fields.
-    WWWAuthenticateVal = <<"Digest realm=\"atlanta.com\","
-                           " domain=\"sip:boxesbybob.com\", qop=\"auth\","
-                           " nonce=\"f84f1cec41e6cbe5aea9c8e88d359\","
-                           " opaque=\"\", stale=FALSE, algorithm=MD5">>,
-    check_no_comma_split(<<"WWW-Authenticate">>,  WWWAuthenticateVal),
+add_topmost_to_singleton_test() ->
+    H0 = ersip_hdr:new(<<"To">>),
+    ?assertError({api_error, _}, ersip_hdr:add_topmost([],H0)),
+    ok.
 
-    AuthorizationVal = <<"Digest username=\"Alice\", realm=\"atlanta.com\","
-                         " nonce=\"84a4cc6f3082121f32b42a2187831a9e\","
-                         " response=\"7587245234b3434cc3412213e5f113a5432\"">>,
-    check_no_comma_split(<<"Authorization">>, AuthorizationVal),
-
-    ProxyAuthenticateVal = <<"Digest realm=\"atlanta.com\","
-                             " domain=\"sip:ss1.carrier.com\", qop=\"auth\","
-                             " nonce=\"f84f1cec41e6cbe5aea9c8e88d359\","
-                             " opaque=\"\", stale=FALSE, algorithm=MD5">>,
-    check_no_comma_split(<<"Proxy-Authenticate">>, ProxyAuthenticateVal),
-
-    ProxyAuthorizationVal = <<"Digest username=\"Alice\", realm=\"atlanta.com\","
-                              " nonce=\"c60f3082ee1212b402a21831ae\","
-                              " response=\"245f23415f11432b3434341c022\"">>,
-    check_no_comma_split(<<"Proxy-Authorization">>, ProxyAuthorizationVal).
-
-check_no_comma_split(HeaderName, Value) ->
-    H0 = ersip_hdr:new(HeaderName),
-    H1 = ersip_hdr:add_value(Value, H0),
-    ?assertEqual([Value], ersip_hdr:raw_values(H1)).
 '''

@@ -217,20 +217,14 @@ class SIPUriParser(object):
         return self.to_inner(self.from_inner(transport).lower())
 
     def _is_valid_token(self, token):
-        print(f'Token: {token}')
         if not token:
             return False
         symbols = iter(token)
         for int_sym in symbols:
-            print(f'Not normalized sym: {int_sym}')
             sym = self._normalize(int_sym)
-            print(f'Normalized sym: {sym}')
             # TODO: this ought to be really slow. Fix this.
             if self.from_inner(sym).isalnum() or sym in self.TOKEN_CHAR:
-                print(f'Sym {sym} isalnum: {self.from_inner(sym).isalnum()}')
-                print('Continuing')
                 continue
-
             else:
                 return False
         return True
