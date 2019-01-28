@@ -57,7 +57,7 @@ class Header(object):
         return f'{self.name}={self.values}'
 
     def __eq__(self, other):
-        if isinstance(other, Header):
+        if isinstance(other, Header) or issubclass(other.__class__, Header):
             return self.key == other.key and self.values == other.values
         return NotImplemented
 

@@ -1,5 +1,5 @@
 from pysip.binary import to_integer
-from pysip import KNOWN_TRANSPORT
+from pysip import KNOWN_TRANSPORT, TOKEN_CHARS
 from uritools.encoding import uridecode
 import re
 import string
@@ -212,11 +212,11 @@ class SIPUriParser(object):
         return scheme, hostport, params, headers
 
     def _validate_transport(self, transport):
-        if self.from_inner(transport).lower() not in KNOWN_TRANSPORT and not self._is_valid_token(transport):
+        if self.from_inner(transport).lower() not in KNOWN_TRANSPORT and not self.is_valid_token(transport):
             raise SipUriTransportError(f'Invalid transport: {transport}')
         return self.to_inner(self.from_inner(transport).lower())
 
-    def _is_valid_token(self, token):
+    def is_valid_token(self, token):
         if not token:
             return False
         symbols = iter(token)
@@ -232,7 +232,7 @@ class SIPUriParser(object):
     def _validate_user_param(self, user):
         if user.lower() in (PARAM_USER_IP, PARAM_USER_PHONE):
             return user.lower()
-        elif self._is_valid_token(user):
+        elif self.is_valid_token(user):
             return user
         else:
             raise ParamParseError(f'Cannot parse user param user={user}')
@@ -339,7 +339,7 @@ class SIPUriParserUnicode(SIPUriParser):
 
     PASSWD_UNRESERVED = u'&=+$,'
 
-    TOKEN_CHAR = u"-.!%*_+`'~"
+    TOKEN_CHAR = TOKEN_CHARS
 
     MARK = u"-_.!~*'()"
 
@@ -391,7 +391,7 @@ class SIPUriParserBytes(SIPUriParser):
 
     PASSWD_UNRESERVED = b'&=+$,'
 
-    TOKEN_CHAR = b"-.!%*_+`'~"
+    TOKEN_CHAR = TOKEN_CHARS.encode(SIPUriParserUnicode.ENCODING)
 
     MARK = b"-_.!~*'()"
 
