@@ -2,14 +2,18 @@ from pysip import PySIPException
 from pysip.message.hdr import Header
 from pysip.message.method import Method
 from pysip.message.method_set import MethodSet
+from pysip.message.hnames import ALLOW_HEADER
 
 
 class AllowError(PySIPException):
     pass
 
 
-class AllowHeader(object):
+class AllowHeader(Header):
     def __init__(self, method_set):
+        super().__init__(name=ALLOW_HEADER)
+        for method in method_set.method_set:
+            self.add_value(method.method)
         self.method_set = method_set
 
     def build_header(self, header_name):

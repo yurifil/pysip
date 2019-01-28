@@ -1,7 +1,6 @@
 from collections import namedtuple
 from pysip.binary import to_string
 from pysip import PySIPException
-#from pysip.message.parser_aux import check_token
 
 Method = namedtuple('method', 'method')
 
@@ -32,8 +31,7 @@ class Method(object):
     def _is_valid_token(string):
         if not string:
             return False
-        symbols = iter(string)
-        for sym in symbols:
+        for sym in string:
             if sym.isalnum() or sym in TOKEN_CHARS:
                 continue
             else:

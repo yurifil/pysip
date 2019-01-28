@@ -6,7 +6,9 @@ TO_HEADER = 'to'
 CALLID_HEADER = 'call-id'
 CSEQ_HEADER = 'cseq'
 MAXFORWARDS_HEADER = 'max-forwards'
-VIA = 'via'
+VIA_HEADER = 'via'
+ALLOW_HEADER = 'Allow'
+CONTACT_HEADER = 'Contact'
 
 HeaderKey = namedtuple('hdr_key', 'header')
 
