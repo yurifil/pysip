@@ -217,6 +217,7 @@ class ReplyOptions(object):
     @reason.setter
     def reason(self, reason):
         self._reason_val = reason
+
 '''
 -spec reply(ersip_reply:options() | ersip_status:code(), sipmsg()) -> sipmsg().
 reply(Code, #sipmsg{} = SipMsg) when is_integer(Code) andalso Code >= 100 andalso Code =< 699 ->

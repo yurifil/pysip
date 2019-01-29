@@ -30,6 +30,22 @@ resp_msg = b"SIP/2.0 200 OK" \
            b"\r\n\r\nTest"
 
 
+def default_sip_msg():
+    msg = b"INVITE sip:bob@biloxi.com SIP/2.0"\
+          b"\r\nVia: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bK776asdhds"\
+          b"\r\nVia: SIP/2.0/UDP bigbox3.site3.atlanta.com"\
+          b"\r\nMax-Forwards: 70"\
+          b"\r\nTo: Bob <sip:bob@biloxi.com>"\
+          b"\r\nFrom: Alice <sip:alice@atlanta.com>;tag=1928301774"\
+          b"\r\nCall-ID: a84b4c76e66710@pc33.atlanta.com"\
+          b"\r\nCSeq: 314159 INVITE"\
+          b"\r\nContact: <sip:alice@pc33.atlanta.com>"\
+          b"\r\nContent-Type: application/sdp"\
+          b"\r\nContent-Length: 4"\
+          b"\r\n\r\nTest"
+    return parse(msg)
+
+
 def test_clear_headers():
     msg = SipMsg()
     msg.method = sip_method.invite()
@@ -42,6 +58,7 @@ def test_clear_headers():
     msg.add_header("Call-Id", "some-call-id")
     msg.clear_headers()
     assert not msg.headers
+
 
 
 @pytest.mark.not_ready
@@ -192,6 +209,7 @@ def test_parse_no_required_field():
 
 @pytest.mark.not_ready
 def test_reply():
+
     req_msg = b"INVITE sip:bob@biloxi.com SIP/2.0"\
             b"\r\nVia: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bK776asdhds"\
             b"\r\nVia: SIP/2.0/UDP bigbox3.site3.atlanta.com"\
