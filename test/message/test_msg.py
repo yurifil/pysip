@@ -378,3 +378,4 @@ def test_get_parts():
     ?assertEqual(undefined, ersip_sipmsg:reason(SipMsg)),
     ?assertEqual({method, <<"INVITE">>}, ersip_sipmsg:method(SipMsg)),
     ok.'''
+

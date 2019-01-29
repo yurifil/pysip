@@ -1,21 +1,44 @@
-from collections import namedtuple
 from secrets import token_bytes
-from pysip import PySIPException
 from pysip.message.pysip_id import token
+from pysip.binary import to_lower
 import re
-
-Branch = namedtuple('branch', 'binary')
-BranchKey = namedtuple('branch_key', 'binary')
 
 rfc3261_branch_rx = re.compile(b'z9hG4bK.*')
 rfc3261_branch_key_rx = re.compile(b'z9hg4bk.*')
 
 
-def make(binary):
-    if isinstance(binary, bytes):
-        return Branch(binary)
-    else:
-        raise PySIPException
+class BranchError(ValueError):
+    pass
+
+
+class BranchKeyError(ValueError):
+    pass
+
+
+class Branch(object):
+    def __init__(self, binary):
+        if not isinstance(binary, bytes):
+            raise BranchError
+        self.binary = binary
+
+    def __eq__(self, other):
+        if isinstance(other, (Branch, BranchKey)):
+            return BranchKey(self) == BranchKey(other)
+        return NotImplemented
+
+
+class BranchKey(object):
+    ENCODING = 'utf-8'
+
+    def __init__(self, branch):
+        if not isinstance(branch, (Branch, BranchKey)):
+            raise BranchKeyError
+        self.binary = to_lower(branch.binary, encoding=self.ENCODING)
+
+    def __eq__(self, other):
+        if isinstance(other, BranchKey):
+            return self.binary == other.binary
+        return NotImplemented
 
 
 def make_rfc3261(binary):
@@ -40,9 +63,9 @@ def assemble(branch):
 
 def make_key(branch):
     if isinstance(branch, Branch):
-        return BranchKey(branch.binary)
+        return BranchKey(Branch)
     elif isinstance(branch, BranchKey):
-        return branch.binary
+        return branch
 
 
 def make_random(num_bytes):

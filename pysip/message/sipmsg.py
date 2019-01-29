@@ -22,6 +22,14 @@ class SipMsg(object):
         self._reason_val = None
 
     @property
+    def ruri(self):
+        return self.message.uri
+
+    @ruri.setter
+    def ruri(self, val):
+        self.message.uri = val
+
+    @property
     def status(self):
         return None
 
