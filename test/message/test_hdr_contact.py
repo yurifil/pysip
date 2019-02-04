@@ -1,123 +1,87 @@
-def test_rebuild():
-    pass
-
-'''
-rebuild(Bin) ->
-    Contact = ersip_hdr_contact:make(Bin),
-    ContactBin = iolist_to_binary(ersip_hdr_contact:assemble(Contact)),
-    {ok, Contact1} = ersip_hdr_contact:parse(ContactBin),
-    ?assertEqual(Contact, Contact1).
-
-parse_error(Bin) ->
-    ?assertMatch({error, {invalid_contact, _}}, ersip_hdr_contact:parse(Bin)).
-
-%%
-%% Copyright (c) 2018 Dmitry Poroh
-%% All rights reserved.
-%% Distributed under the terms of the MIT License. See the LICENSE file.
-%%
-%% SIP Contact header tests
-%%
-
--module(ersip_hdr_contact_test).
-
--include_lib("eunit/include/eunit.hrl").
-
-%%%===================================================================
-%%% Cases
-%%%===================================================================
-
-rebuild_test() ->
-    rebuild(<<"sip:a@b">>),
-    rebuild(<<"sip:a@b;q=1">>),
-    rebuild(<<"<sip:a@b>">>),
-    rebuild(<<"<sip:a@b>;q=1">>),
-    rebuild(<<"<sip:a@b>;expires=0">>),
-    rebuild(<<"<sip:a@b>;q=1;expires=0">>),
-    rebuild(<<"<sip:a@b>;Q=1;ExPiRes=0;a=b">>),
-    rebuild(<<"<sip:a@b>;a=b">>),
-    rebuild(<<"<sip:a@b>;a">>),
-    rebuild(<<"A B <sip:a@b>;a">>),
-    ok.
+from pysip.message.hdr_contact import ContactHeader, ContactHeaderError
+from pysip.uri.uri import Uri
+from pysip.message.qvalue import QValueError, QValue
+from pysip import PySIPException
+import pytest
 
 
-parse_error_test() ->
-    parse_error(<<"a@b">>),
-    parse_error(<<"sip:a@b;q=a">>),
-    parse_error(<<"sip:a@b;q=2">>),
-    parse_error(<<"sip:a@b;expires=a">>),
-    parse_error(<<"<sip:a@b>;q=a">>),
-    parse_error(<<"<sip:a@b>;q=2">>),
-    parse_error(<<"<sip:a@b>;expires=a">>),
-    parse_error(<<"A <sip:a@b>;q=a">>),
-    parse_error(<<"B <sip:a@b>;q=2">>),
-    parse_error(<<"C <sip:a@b>;expires=a">>),
-    parse_error(<<"C <sip:a@b>;?=$">>),
-    parse_error(<<"C <sip:a@b>;?">>),
-    parse_error(<<"<sip:a@b">>),
-    parse_error(<<"C <sip:a@b>;;;;;">>),
-    parse_error(<<"sip:a@b;v=a, some bad rest">>),
-    ok.
-
-make_error_test() ->
-    ?assertError({invalid_contact, _}, ersip_hdr_contact:make(<<"a@b">>)),
-    ?assertError({invalid_contact, _}, ersip_hdr_contact:make(<<"<a@b>;expires=a">>)),
-    ok.
-
-expires_test() ->
-    Alice20 = ersip_hdr_contact:make(<<"Alice <sip:alice@atlanta.com>;expires=20">>),
-    ?assertEqual(20, ersip_hdr_contact:expires(Alice20, any)),
-    Alice30 = ersip_hdr_contact:set_expires(30, Alice20),
-    ?assertEqual(30, ersip_hdr_contact:expires(Alice30, any)),
-    ?assertEqual(<<"Alice <sip:alice@atlanta.com>;expires=30">>, iolist_to_binary(ersip_hdr_contact:assemble(Alice30))),
-
-    AliceNoExpires = ersip_hdr_contact:make(<<"Alice <sip:alice@atlanta.com>">>),
-    ?assertEqual(21, ersip_hdr_contact:expires(AliceNoExpires, 21)),
-
-    Alice45 = ersip_hdr_contact:make(<<"Alice <sip:alice@atlanta.com>;Expires=45">>),
-    ?assertEqual(45, ersip_hdr_contact:expires(Alice45, any)),
-    ok.
-
-qvalue_test() ->
-    AliceNoQValue = ersip_hdr_contact:make(<<"Alice <sip:alice@atlanta.com>">>),
-    Alice1 = ersip_hdr_contact:make(<<"Alice <sip:alice@atlanta.com>;q=1.0">>),
-    ?assertEqual(ersip_qvalue:make(<<"1.0">>), ersip_hdr_contact:qvalue(Alice1, any)),
-    Alice01 = ersip_hdr_contact:set_qvalue(ersip_qvalue:make(<<"0.1">>), Alice1),
-    ?assertEqual(ersip_qvalue:make(<<"0.1">>), ersip_hdr_contact:qvalue(Alice01, any)),
-    ?assertEqual(ersip_qvalue:make(<<"0.13">>), ersip_hdr_contact:qvalue(AliceNoQValue, ersip_qvalue:make(<<"0.13">>))),
-    ok.
-
-uri_test() ->
-    Alice = ersip_hdr_contact:make(<<"Alice <sip:alice@atlanta.com>">>),
-    AliceURI = ersip_uri:make(<<"sip:alice@atlanta.com">>),
-    ?assertEqual(AliceURI, ersip_hdr_contact:uri(Alice)),
-    ok.
-
-set_param_test() ->
-    Alice = ersip_hdr_contact:make(<<"Alice <sip:alice@atlanta.com>">>),
-    AliceWExpires = ersip_hdr_contact:set_param(<<"expires">>, <<"30">>, Alice),
-    ?assertEqual(30, ersip_hdr_contact:expires(AliceWExpires, undefined)),
-    AliceWExpiresQ = ersip_hdr_contact:set_param(<<"q">>, <<"0.1">>, AliceWExpires),
-    ?assertEqual(30, ersip_hdr_contact:expires(AliceWExpiresQ, undefined)),
-    ?assertEqual(ersip_qvalue:make(<<"0.1">>), ersip_hdr_contact:qvalue(AliceWExpiresQ, undefined)),
-
-    AliceWCustomP = ersip_hdr_contact:set_param(<<"myparam">>, <<"Value">>, Alice),
-    ?assertEqual(ersip_hdr_contact:make(<<"Alice <sip:alice@atlanta.com>;myparam=Value">>), AliceWCustomP),
-    ?assertEqual({ok, <<"Value">>}, ersip_hdr_contact:param(<<"MyParam">>, AliceWCustomP)),
-    ok.
-
-set_param_error_test() ->
-    Alice = ersip_hdr_contact:make(<<"Alice <sip:alice@atlanta.com>">>),
-    ?assertError({invalid_expires, _}, ersip_hdr_contact:set_param(<<"expires">>, <<"@">>, Alice)),
-    ?assertError({invalid_qvalue, _}, ersip_hdr_contact:set_param(<<"q">>, <<"2">>, Alice)),
-    ?assertError({invalid_param, _}, ersip_hdr_contact:set_param(<<"@">>, <<"Value">>, Alice)),
-    ?assertError({invalid_param, _}, ersip_hdr_contact:set_param(<<"@">>, <<>>, Alice)),
-    ok.
-
-%%%===================================================================
-%%% Helpers
-%%%===================================================================
+@pytest.mark.parametrize('value', ['sip:a@b',
+                                   'sip:a@b;q=1',
+                                   '<sip:a@b>',
+                                   '<sip:a@b>;q=1',
+                                   '<sip:a@b>;expires=0',
+                                   '<sip:a@b>;q=1;expires=0',
+                                   '<sip:a@b>;Q=1;ExPiRes=0;a=b',
+                                   '<sip:a@b>;a=b',
+                                   '<sip:a@b>;a',
+                                   'A B <sip:a@b>;a'])
+def test_rebuild(value):
+    contact = ContactHeader(value)
+    rebuilt_contact = ContactHeader(contact.assemble())
+    assert contact == rebuilt_contact
 
 
+@pytest.mark.parametrize('value', ['a@b',
+                                   'sip:a@b;q=a',
+                                   'sip:a@b;q=2',
+                                   '<sip:a@b>;expires=a',
+                                   'A <sip:a@b>;q=a',
+                                   'B <sip:a@b>;q=2',
+                                   'C <sip:a@b>;expires=a',
+                                   'C <sip:a@b>;?=$',
+                                   'C <sip:a@b>;?',
+                                   '<sip:a@b',
+                                   'C <sip:a@b>;;;;;',
+                                   'sip:a@b;v=a, some bad rest'])
+def test_parse_error(value):
+    with pytest.raises(ContactHeaderError):
+        ContactHeader(value)
 
-'''
+
+def test_expires():
+    alice = ContactHeader('Alice <sip:alice@atlanta.com>;expires=20')
+    assert alice.get_expires() == 20
+    alice.set_expires(30)
+    assert alice.get_expires() == 30
+    assert "Alice <sip:alice@atlanta.com>;expires=30" == alice.assemble()
+    alice_no_expires = ContactHeader("Alice <sip:alice@atlanta.com>")
+    assert alice_no_expires.get_expires() is None
+    assert alice_no_expires.get_expires(21) == 21
+    alice45 = ContactHeader("Alice <sip:alice@atlanta.com>;Expires=45")
+    assert alice45.get_expires() == 45
+
+
+def test_qvalue():
+    alice_no_qvalue = ContactHeader("Alice <sip:alice@atlanta.com>")
+    alice1 = ContactHeader("Alice <sip:alice@atlanta.com>;q=1.0")
+    assert QValue('1.0') == alice1.get_qvalue()
+    alice1.set_qvalue(QValue('0.1'))
+    assert QValue('0.1') == alice1.get_qvalue()
+    assert QValue('0.13') == alice_no_qvalue.get_qvalue(default=QValue('0.13'))
+
+
+def test_uri():
+    alice = ContactHeader('Alice <sip:alice@atlanta.com>')
+    assert Uri('sip:alice@atlanta.com') == alice.uri
+
+
+def test_set_param():
+    alice = ContactHeader("Alice <sip:alice@atlanta.com>")
+    alice.set_param('expires', '30')
+    assert alice.get_expires(None) == 30
+    alice.set_param('q', '0.1')
+    assert alice.get_qvalue(None) == QValue('0.1')
+    assert alice.get_expires(None) == 30
+    alice.set_param('myparam', 'Value')
+    assert alice == ContactHeader('Alice <sip:alice@atlanta.com>;expires=30;q=0.1;myparam=Value')
+    assert alice.get_param('MyParam') == 'Value'
+
+
+@pytest.mark.parametrize('name, value', [("expires", "@"),
+                                         ("q", "2"),
+                                         ("@", "Value"),
+                                         ("@", None)])
+def test_set_param_error(name, value):
+    alice = ContactHeader("Alice <sip:alice@atlanta.com>")
+    with pytest.raises(ContactHeaderError):
+        alice.set_param(name, value)

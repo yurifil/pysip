@@ -136,22 +136,49 @@ class SIPUriParser(object):
             # print(f'Port not found')
             return None
 
+    # TODO: do this without recursion!
+    def domainlabel_valid(self, bytes_list):
+        if len(bytes_list) == 0:
+            return False
+        if len(bytes_list) == 1 and self.from_inner(self._normalize(bytes_list[0])).isalnum():
+            return True
+        if self._normalize(bytes_list[0]) == self.DOT and self.from_inner(self._normalize(bytes_list[1])).isalnum():
+            return self.domainlabel_valid(bytes_list[2:])
+        if self.from_inner(self._normalize(bytes_list[0])).isalnum() and self._normalize(bytes_list[1]) == self.DOT:
+            return self.domainlabel_valid(bytes_list[1:])
+        if bytes_list[0] == self.DASH:
+            return self.domainlabel_valid(bytes_list[1:])
+        if self.from_inner(self._normalize(bytes_list[0])).isalnum():
+            return self.domainlabel_valid(bytes_list[1:])
+        return False
+
+    # TODO: do this without recursion!
+    def toplabel_valid(self, bytes_list):
+        if len(bytes_list) == 0:
+            return False
+        if len(bytes_list) == 1 and self.from_inner(self._normalize(bytes_list[0])).isalnum():
+            return True
+        if self.from_inner(self._normalize(bytes_list[0])).isalnum() and self._normalize(bytes_list[1]) == self.DOT:
+            return self.domainlabel_valid(bytes_list[1:])
+        if self._normalize(bytes_list[0]) == self.DASH:
+            return self.toplabel_valid(bytes_list[1:])
+        if self.from_inner(self._normalize(bytes_list[0])).isalnum():
+            return self.toplabel_valid(bytes_list[1:])
+        return False
+
     def _check_host(self, host):
         print(f'Checking host {host}')
-        symbols = iter(host)
-        for int_sym in symbols:
-            sym = self._normalize(int_sym)
-            if self.from_inner(sym).isalnum():
-                continue
-            elif sym == self.DOT:
-                try:
-                    next1 = self._normalize(next(symbols))
-                except StopIteration:
-                    return False
-                if not self.from_inner(next1).isalnum():
-                    return False
-            else:
-                return False
+        reversed_symbols = list(reversed(list(iter(host))))
+        int_sym = reversed_symbols[0]
+        sym = self._normalize(int_sym)
+        if sym == self.DOT:
+            next_sym = self._normalize(next(reversed_symbols))
+            if self.from_inner(next_sym).isalnum():
+                return self.toplabel_valid(list(reversed_symbols[1:]))
+        elif self.from_inner(sym).isalnum():
+            return self.toplabel_valid(list(reversed_symbols))
+        else:
+            return False
         return True
 
     def validate_host(self, host):
@@ -322,6 +349,8 @@ class SIPUriParserUnicode(SIPUriParser):
         u':', u';', u'/', u'?', u'#', u'[', u']', u'@'
     )
 
+    DASH = u'-'
+
     EQUAL = u'='
 
     # RFC 3986 3.3 dot-segments
@@ -373,6 +402,8 @@ class SIPUriParserBytes(SIPUriParser):
     COLON, SEMICOLON, SLASH, QUEST, HASH, LBRACKET, RBRACKET, AT = (
         b':', b';', b'/', b'?', b'#', b'[', b']', b'@'
     )
+
+    DASH = b'-'
 
     EQUAL = b'='
 

@@ -5,12 +5,106 @@ import re
 
 
 QUOTED_STRING_RX = re.compile(r'"(.+)"')
+SPLIT_PATTERN_RX = re.compile(r'\s+')
 
 PARSER = SIPUriParserUnicode()
+
+START_STATE = 'start'
+ESCAPED_STATE = 'escaped'
+RAW_STATE = 'raw'
 
 
 class ParserAUXError(PySIPException):
     pass
+
+
+'''
+compile_pattern(lws) ->
+    binary:compile_pattern([<<" ">>, <<"\t">>]).
+
+token_list(Binary, SEP) ->
+    CompiledPattern = compile_pattern(SEP),
+    token_list_impl(Binary, [], CompiledPattern).
+
+token_list_impl(Binary, Acc, CompPattern) ->
+    case binary:split(Binary, CompPattern) of
+        [<<>>, Rest] ->
+            token_list_impl(Rest, Acc, CompPattern);
+        [T, Rest] ->
+            case check_token(T) of
+                true ->
+                    token_list_impl(Rest, [T | Acc], CompPattern);
+                false ->
+                    token_list_impl_process_rest(Acc, Binary)
+            end;
+        [T] ->
+            case check_token(T) of
+                true ->
+                    {ok, lists:reverse([T | Acc]), <<>>};
+                false ->
+                    token_list_impl_process_rest(Acc, Binary)
+            end
+    end.
+
+token_list_impl_process_rest(Acc, Binary) ->
+    {Acc1, Rest1} =
+        case find_token_end(Binary, 0) of
+            0 ->
+                {Acc, Binary};
+            N ->
+                <<LastToken:N/binary, Rest0/binary>> = Binary,
+                {[LastToken|Acc], Rest0}
+        end,
+    case Acc1 of
+        [] ->
+            error;
+        _ ->
+            {ok, lists:reverse(Acc1), Rest1}
+    end.
+'''
+
+
+def token_list_process_rest(tokens, string):
+    token_end = find_token_end(string)
+    print(f'tokens: {tokens}, string: {string}, token_end: {token_end}')
+    if token_end == 0:
+        acc, rest = tokens, string
+    else:
+        acc, rest = tokens.copy(), string[token_end:]
+        acc.append(string[:token_end])
+    if len(acc) == 0:
+        raise ParserAUXError(f'Cannot process token list rest {tokens}, {string}')
+    print(f'Tokens: {acc} Rest: {rest}')
+    return acc, rest
+
+
+def token_list_impl(string, acc):
+    print(f'Parsing tokens from {string}, acc {acc}')
+    splitted_string = SPLIT_PATTERN_RX.split(string, maxsplit=1)
+    print(f'Splitted string: {splitted_string}')
+    if len(splitted_string) == 2:
+        print(f'Splitted in two')
+        if splitted_string[0] == '':
+            return token_list_impl(splitted_string[1], acc)
+        else:
+            if check_token(splitted_string[0]):
+                acc.append(splitted_string[0])
+                print(f'{splitted_string[0]} is token. tokens: {acc}')
+                return token_list_impl(splitted_string[1], acc)
+            else:
+                print(f'{splitted_string[0]} is not token. processing rest')
+                return token_list_process_rest(acc, string)
+    elif len(splitted_string) == 1:
+        print(f'Splitted in one.')
+        if check_token(splitted_string[0]):
+            return acc
+        else:
+            print(f'{splitted_string[0]} is not token. processing rest')
+            return token_list_process_rest(acc, string)
+
+
+def token_list(string):
+    return token_list_impl(string, [])
 
 
 def parse_token(string):
@@ -19,6 +113,13 @@ def parse_token(string):
     if end == 0:
         raise ParserAUXError(f'Cannot parse token from string {string}: not a token.')
     return string[:end], string[end:]
+
+
+def check_token(token):
+    for sym in token:
+        if not is_token_char(sym):
+            return False
+    return True
 
 
 def find_token_end(string):
@@ -36,40 +137,114 @@ def parse_separator(string, separator):
         return separator, string[len(separator):]
 
 
-def is_quoted_string(string):
-    url_unquoted_string = unquote(string)
-    if QUOTED_STRING_RX.match(url_unquoted_string):
-        return True
-    return False
+def get_quoted_string_rest(string, state):
+    if string[0] == '"' and state == START_STATE:
+        return get_quoted_string_rest(string[1:], state=RAW_STATE)
+    elif state == START_STATE:
+        raise ParserAUXError(f'Invalid START_STATE found for {string}')
+    if string[0] == '"' and state == RAW_STATE:
+        return string[1:]
+    if string[0] == '\\' and state == RAW_STATE:
+        return get_quoted_string_rest(string[1:], state=ESCAPED_STATE)
+    if state == RAW_STATE:
+        return get_quoted_string_rest(string[1:], state=RAW_STATE)
+
+
+def quoted_string(string):
+    if not string:
+        raise ParserAUXError('Not a quoted string: empty string')
+    '''
+        url_unquoted_string = unquote(string)
+        if QUOTED_STRING_RX.match(url_unquoted_string):
+            return True
+        return False
+        '''
+    try:
+        urlunquoted_string = unquote(string)
+    except SyntaxError as e:
+        raise ParserAUXError(f'Cannot parse quoted string {string}: could not urlunquote:\n{e}')
+    trimmed_string = urlunquoted_string.strip()
+    print(f'quoted_string: trimmed string {trimmed_string}')
+    try:
+        rest = get_quoted_string_rest(trimmed_string, state=START_STATE)
+        print(f'quoted_string: quoted: {trimmed_string[:len(trimmed_string)-len(rest)]} rest: {trimmed_string[len(trimmed_string)-len(rest):]}')
+        return trimmed_string[:len(trimmed_string)-len(rest)], trimmed_string[len(trimmed_string)-len(rest):]
+    except ParserAUXError as e:
+        raise ParserAUXError(f'Cannot parse quoted string {string}: {e}')
+    except Exception as e:
+        raise e
+
+'''
+%% @private
+-spec quoted_string_impl(binary(), State) -> {ok, Rest :: binary()} | error when
+      State :: start
+             | raw
+             | escaped.
+
+quoted_string_impl(<<>>, _) ->
+    error;
+quoted_string_impl(<<"\"", R/binary>>, start) ->
+    quoted_string_impl(R, raw);
+quoted_string_impl(_, start) ->
+    error;
+quoted_string_impl(<<"\"", R/binary>>, raw) ->
+    {ok, R};
+quoted_string_impl(<<"\\", R/binary>>, raw) ->
+    quoted_string_impl(R, escaped);
+quoted_string_impl(B, raw) ->
+    case utf8_len(B) of
+        {ok, Len} ->
+            RestLen = byte_size(B) - Len,
+            quoted_string_impl(binary:part(B, Len, RestLen), raw);
+        error ->
+            error
+    end;
+quoted_string_impl(<<Byte:8, R/binary>>, escaped) when Byte =< 16#7F ->
+    quoted_string_impl(R, raw).
+
+-spec quoted_string(Quoted) -> {ok, Quoted, Rest} | error when
+      Quoted :: binary(),
+      Quoted :: binary(),
+      Rest   :: binary().
+quoted_string(Quoted) ->
+    Trimmed = ersip_bin:trim_head_lws(Quoted),
+    TrimmedLen = byte_size(Trimmed),
+    case quoted_string_impl(Trimmed, start) of
+        {ok, Rest} ->
+            Len = TrimmedLen - byte_size(Rest),
+            {ok, binary:part(Trimmed, 0, Len), Rest};
+        error ->
+            error
+    end.
+'''
 
 
 def parse_gen_param_value(v):
     if v is None:
         return None
-    if is_quoted_string(v):
+    try:
+        q, r = quoted_string(v)
         return v
-    elif PARSER.is_valid_token(v):
-        return v
-    else:
-        try:
-            host = PARSER.validate_host(v)
+    except ParserAUXError:
+        if PARSER.is_valid_token(v):
             return v
-        except ValueError as e:
-            raise ParserAUXError(f'Cannot parse param {v}: {e}')
+        else:
+            try:
+                host = PARSER.validate_host(v)
+                return v
+            except ValueError as e:
+                raise ParserAUXError(f'Cannot parse param {v}: {e}')
 
 
 def parse_params(param_string, separator):
-    print(f'param_str: {param_string}')
     params_list = list()
     raw_pairs_list = param_string.split(separator)
-    print(f'splitted by {separator}: {raw_pairs_list}')
     for raw_pair in raw_pairs_list:
         key_value_pair = raw_pair.split('=')
         if len(key_value_pair) > 1:
             k, v = key_value_pair[0].strip(), key_value_pair[1].strip()
         else:
             k, v = key_value_pair[0].strip(), None
-        print(f'{k}: {v}')
         if not PARSER.is_valid_token(k):
             raise ParserAUXError(f'Invalid parameter name {k}: not a token.')
         param = parse_gen_param_value(v)
@@ -77,10 +252,44 @@ def parse_params(param_string, separator):
     return params_list
 
 
+def parse_all(string, parser_fun_list):
+    result = list()
+    string_rest = string
+    for parser_fun in parser_fun_list:
+        res_temp, string_rest = parser_fun(string_rest)
+        result.append(result)
+    return result
 
 
 
 '''
+%% @doc Apply series of parsers:
+-spec parse_all(binary(), [ParserFun]) -> ParseAllResult when
+      ParserFun      :: fun((binary()) -> parse_result()),
+      ParseAllResult :: {ok, [ParseResult], Rest :: binary()}
+                      | {error, term()},
+      ParseResult    :: term().
+parse_all(Binary, Parsers) ->
+    parse_all_impl(Binary, Parsers, []).
+
+-spec parse_all_impl(binary(), [ParserFun], Acc) -> ParseAllResult when
+      ParserFun      :: fun((binary()) -> parse_result()),
+      ParseAllResult :: {ok, [ParseResult], Rest :: binary()}
+                      | {error, term()},
+      ParseResult    :: term(),
+      Acc            :: list().
+parse_all_impl(Binary, [], Acc) ->
+    {ok, lists:reverse(Acc), Binary};
+parse_all_impl(Binary, [F | FRest], Acc) ->
+    case F(Binary) of
+        {ok, ParseResult, BinRest} ->
+            parse_all_impl(BinRest, FRest, [ParseResult | Acc]);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+
 %% gen-value      =  token / host / quoted-string
 -spec parse_gen_param_value(binary()) -> parse_result(gen_param_value()).
 parse_gen_param_value(<<>>) ->
@@ -205,29 +414,9 @@ parse_sep(Sep, Bin) ->
 %% DQUOTE *(qdtext / quoted-pair ) DQUOTE
 %% qdtext         =  LWS / %x21 / %x23-5B / %x5D-7E
 %%                        / UTF8-NONASCII
--spec quoted_string(Quoted) -> {ok, Quoted, Rest} | error when
-      Quoted :: binary(),
-      Quoted :: binary(),
-      Rest   :: binary().
-quoted_string(Quoted) ->
-    Trimmed = ersip_bin:trim_head_lws(Quoted),
-    TrimmedLen = byte_size(Trimmed),
-    case quoted_string_impl(Trimmed, start) of
-        {ok, Rest} ->
-            Len = TrimmedLen - byte_size(Rest),
-            {ok, binary:part(Trimmed, 0, Len), Rest};
-        error ->
-            error
-    end.
 
-%% @doc Parse token list separated with SEP
--spec token_list(binary(), SEP) -> {ok, [Token, ...], Rest} | error when
-      SEP    :: separator(),
-      Token  :: binary(),
-      Rest   :: binary().
-token_list(Binary, SEP) ->
-    CompiledPattern = compile_pattern(SEP),
-    token_list_impl(Binary, [], CompiledPattern).
+
+
 
 %% @doc Check binary is token
 %% token       =  1*(alphanum / "-" / "." / "!" / "%" / "*"
@@ -235,16 +424,6 @@ token_list(Binary, SEP) ->
 -spec check_token(binary()) -> boolean().
 check_token(Bin) ->
     check_token(Bin, start).
-
-%% @doc Apply series of parsers:
--spec parse_all(binary(), [ParserFun]) -> ParseAllResult when
-      ParserFun      :: fun((binary()) -> parse_result()),
-      ParseAllResult :: {ok, [ParseResult], Rest :: binary()}
-                      | {error, term()},
-      ParseResult    :: term().
-parse_all(Binary, Parsers) ->
-    parse_all_impl(Binary, Parsers, []).
-
 
 
 -spec parse_lws(binary()) ->  parse_result({lws, pos_integer()}).
@@ -315,32 +494,7 @@ parse_kvps(Validator, Sep, Bin) ->
 %%% Internal implementation
 %%%===================================================================
 
-%% @private
--spec quoted_string_impl(binary(), State) -> {ok, Rest :: binary()} | error when
-      State :: start
-             | raw
-             | escaped.
 
-quoted_string_impl(<<>>, _) ->
-    error;
-quoted_string_impl(<<"\"", R/binary>>, start) ->
-    quoted_string_impl(R, raw);
-quoted_string_impl(_, start) ->
-    error;
-quoted_string_impl(<<"\"", R/binary>>, raw) ->
-    {ok, R};
-quoted_string_impl(<<"\\", R/binary>>, raw) ->
-    quoted_string_impl(R, escaped);
-quoted_string_impl(B, raw) ->
-    case utf8_len(B) of
-        {ok, Len} ->
-            RestLen = byte_size(B) - Len,
-            quoted_string_impl(binary:part(B, Len, RestLen), raw);
-        error ->
-            error
-    end;
-quoted_string_impl(<<Byte:8, R/binary>>, escaped) when Byte =< 16#7F ->
-    quoted_string_impl(R, raw).
 
 %% @private
 %% @doc get length of the first UTF8 character in binary
@@ -365,52 +519,7 @@ utf8_len(<<UTF8_5:8, _:40, _/binary>>)
 utf8_len(_) ->
     error.
 
-%% @private
--spec token_list_impl(binary(), [binary()], binary:cp()) -> Result when
-      Result :: {ok, [Token, ...], Rest}
-              | error,
-      Token  :: binary(),
-      Rest   :: binary().
-token_list_impl(Binary, Acc, CompPattern) ->
-    case binary:split(Binary, CompPattern) of
-        [<<>>, Rest] ->
-            token_list_impl(Rest, Acc, CompPattern);
-        [T, Rest] ->
-            case check_token(T) of
-                true ->
-                    token_list_impl(Rest, [T | Acc], CompPattern);
-                false ->
-                    token_list_impl_process_rest(Acc, Binary)
-            end;
-        [T] ->
-            case check_token(T) of
-                true ->
-                    {ok, lists:reverse([T | Acc]), <<>>};
-                false ->
-                    token_list_impl_process_rest(Acc, Binary)
-            end
-    end.
 
--spec token_list_impl_process_rest([Token], binary()) -> Result when
-      Result :: {ok, [Token, ...], Rest}
-              | error,
-      Token :: binary(),
-      Rest  :: binary().
-token_list_impl_process_rest(Acc, Binary) ->
-    {Acc1, Rest1} =
-        case find_token_end(Binary, 0) of
-            0 ->
-                {Acc, Binary};
-            N ->
-                <<LastToken:N/binary, Rest0/binary>> = Binary,
-                {[LastToken|Acc], Rest0}
-        end,
-    case Acc1 of
-        [] ->
-            error;
-        _ ->
-            {ok, lists:reverse(Acc1), Rest1}
-    end.
 
 
 %% @private
@@ -426,26 +535,6 @@ check_token(_, _) ->
 
 
 
-%% @private
--spec compile_pattern(separator()) -> binary:cp().
-compile_pattern(lws) ->
-    binary:compile_pattern([<<" ">>, <<"\t">>]).
-
--spec parse_all_impl(binary(), [ParserFun], Acc) -> ParseAllResult when
-      ParserFun      :: fun((binary()) -> parse_result()),
-      ParseAllResult :: {ok, [ParseResult], Rest :: binary()}
-                      | {error, term()},
-      ParseResult    :: term(),
-      Acc            :: list().
-parse_all_impl(Binary, [], Acc) ->
-    {ok, lists:reverse(Acc), Binary};
-parse_all_impl(Binary, [F | FRest], Acc) ->
-    case F(Binary) of
-        {ok, ParseResult, BinRest} ->
-            parse_all_impl(BinRest, FRest, [ParseResult | Acc]);
-        {error, Error} ->
-            {error, Error}
-    end.
 
 -spec parse_non_neg_int_impl(binary(), State , Acc) -> parse_result(non_neg_integer()) when
       State :: start | rest,
