@@ -71,7 +71,7 @@ class Uri(object):
     def make_headers_key(self):
         if self.headers:
             headers_key = dict()
-            for k,v in self.headers.items():
+            for k, v in self.headers.items():
                 headers_key[unquote(k)] = unquote(v)
             return headers_key
         return self.headers

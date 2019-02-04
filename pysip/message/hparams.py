@@ -1,6 +1,6 @@
 from pysip import PySIPException
 from pysip.uri.uri_parser import SIPUriParserUnicode
-from pysip.message.parser_aux import parse_token, parse_params, ParserAUXError
+from pysip.message.parser_aux import parse_params, ParserAUXError
 
 
 class HParamsError(PySIPException):
@@ -56,6 +56,9 @@ class HParams(object):
             self.orig[lower_key] = (orig_key, orig_value)
             self.parsed[HParams.PARSED_NAMES_KEY][parsed_name] = (lower_key, parsed_value)
 
+    def __repr__(self):
+        return self.assemble()
+
     def assemble(self):
         params = list()
         for lower_key in self.order:
@@ -71,6 +74,10 @@ class HParams(object):
             return self.parsed[HParams.PARSED_NAMES_KEY][param_name.lower()][1]
         else:
             return HParamNotFound()
+
+    def __eq__(self, other):
+        if isinstance(other, HParams):
+            return self.orig == other.orig and self.order == other.order
 
 
 
