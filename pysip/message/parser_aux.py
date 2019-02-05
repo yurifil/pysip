@@ -66,7 +66,6 @@ token_list_impl_process_rest(Acc, Binary) ->
 
 def token_list_process_rest(tokens, string):
     token_end = find_token_end(string)
-    print(f'tokens: {tokens}, string: {string}, token_end: {token_end}')
     if token_end == 0:
         acc, rest = tokens, string
     else:
@@ -74,37 +73,35 @@ def token_list_process_rest(tokens, string):
         acc.append(string[:token_end])
     if len(acc) == 0:
         raise ParserAUXError(f'Cannot process token list rest {tokens}, {string}')
-    print(f'Tokens: {acc} Rest: {rest}')
     return acc, rest
 
 
 def token_list_impl(string, acc):
-    print(f'Parsing tokens from {string}, acc {acc}')
     splitted_string = SPLIT_PATTERN_RX.split(string, maxsplit=1)
-    print(f'Splitted string: {splitted_string}')
     if len(splitted_string) == 2:
-        print(f'Splitted in two')
         if splitted_string[0] == '':
             return token_list_impl(splitted_string[1], acc)
         else:
             if check_token(splitted_string[0]):
                 acc.append(splitted_string[0])
-                print(f'{splitted_string[0]} is token. tokens: {acc}')
                 return token_list_impl(splitted_string[1], acc)
             else:
-                print(f'{splitted_string[0]} is not token. processing rest')
                 return token_list_process_rest(acc, string)
     elif len(splitted_string) == 1:
-        print(f'Splitted in one.')
         if check_token(splitted_string[0]):
             return acc
         else:
-            print(f'{splitted_string[0]} is not token. processing rest')
             return token_list_process_rest(acc, string)
 
 
 def token_list(string):
     return token_list_impl(string, [])
+
+
+def parse_slash(string):
+    string = string.strip()
+    if string.startswith('/'):
+        return '/', string[1:].strip()
 
 
 def parse_token(string):
@@ -164,10 +161,8 @@ def quoted_string(string):
     except SyntaxError as e:
         raise ParserAUXError(f'Cannot parse quoted string {string}: could not urlunquote:\n{e}')
     trimmed_string = urlunquoted_string.strip()
-    print(f'quoted_string: trimmed string {trimmed_string}')
     try:
         rest = get_quoted_string_rest(trimmed_string, state=START_STATE)
-        print(f'quoted_string: quoted: {trimmed_string[:len(trimmed_string)-len(rest)]} rest: {trimmed_string[len(trimmed_string)-len(rest):]}')
         return trimmed_string[:len(trimmed_string)-len(rest)], trimmed_string[len(trimmed_string)-len(rest):]
     except ParserAUXError as e:
         raise ParserAUXError(f'Cannot parse quoted string {string}: {e}')
