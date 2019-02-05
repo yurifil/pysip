@@ -27,6 +27,7 @@ class NameAddress(object):
 
     @staticmethod
     def parse(string):
+        print(f'NameAddress.parse({string})')
         try:
             display_name, rest = NameAddress.parse_display_name(string)
             if isinstance(display_name, list) and len(display_name) == 1:
@@ -53,9 +54,11 @@ class NameAddress(object):
 
     @staticmethod
     def parse_display_name(string):
+        print(f'NameAddress.parse_display_name({string})')
         if not string:
             raise NameAddressError(f'Cannot parse display name: empty string')
         if string.startswith('"'):
+            print(f'NameAddress.parse_display_name: startswith "')
             try:
                 display_name, rest = parser_aux.quoted_string(string)
                 print(f'parsing display display_name: {display_name}, rest: {rest}')
