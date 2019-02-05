@@ -1,10 +1,4 @@
-from collections import namedtuple
-from pysip.binary import to_string
 from pysip import PySIPException
-
-#Method = namedtuple('method', 'method')
-
-TOKEN_CHARS = "-.!%*_+`'~"
 
 
 class MethodError(PySIPException):
@@ -12,32 +6,39 @@ class MethodError(PySIPException):
 
 
 class Method(object):
+    TOKEN_CHARS = "-.!%*_+`'~"
+
     def __init__(self, method):
-        self.method = to_string(method)
-        if not self._is_valid_token(self.method):
+        self.method = method
+        if not Method._is_valid_token(self.method):
             raise MethodError(f'Cannot parse method {self.method}: not a valid token.')
 
     def __repr__(self):
         return self.method
+
+    def __eq__(self, other):
+        if isinstance(other, Method):
+            return self.method == other.method
+        return NotImplemented
 
     @staticmethod
     def _is_valid_token(string):
         if not string:
             return False
         for sym in string:
-            if sym.isalnum() or sym in TOKEN_CHARS:
+            if sym.isalnum() or sym in Method.TOKEN_CHARS:
                 continue
             else:
                 return False
         return True
 
 
-OPTIONS = Method(b'OPTIONS')
-INVITE = Method(b'INVITE')
-ACK = Method(b'ACK')
-BYE = Method(b'BYE')
-CANCEL = Method(b'CANCEL')
-REGISTER = Method(b'REGISTER')
+OPTIONS = Method('OPTIONS')
+INVITE = Method('INVITE')
+ACK = Method('ACK')
+BYE = Method('BYE')
+CANCEL = Method('CANCEL')
+REGISTER = Method('REGISTER')
 
 
 def options():
