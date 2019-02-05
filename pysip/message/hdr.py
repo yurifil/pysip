@@ -83,6 +83,9 @@ class Header(object):
             raise HeaderError(f'Cannot represent header {self} value as integer: {e}.')
 
     def serialize_to_bytes(self, append_value=None):
+        return to_bytes(self.serialize_to_string(append_value=append_value))
+
+    def serialize_to_string(self, append_value=None):
         if len(self.values) < 1 and append_value is None:
             raise HeaderError(f'Cannot serialize header {self}: no values.')
         ret_val = ''
@@ -97,7 +100,7 @@ class Header(object):
                 ret_val = f'{to_string(append_value)}\r\n{ret_val}'
             else:
                 ret_val = to_string(append_value)
-        return to_bytes(ret_val)
+        return ret_val
 
 '''
 serialize_to_bin(Header) ->

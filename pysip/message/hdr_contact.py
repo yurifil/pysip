@@ -1,7 +1,5 @@
-from pysip.message.hdr import Header
 from pysip.message.hparams import HParams, HParamNotFound, HParamsError
 from pysip.uri.uri import Uri
-from pysip.message.hnames import CONTACT_HEADER
 from pysip.message.nameaddr import NameAddress, NameAddressError
 from pysip.message.parser_aux import parse_params, check_token, ParserAUXError
 from pysip import PySIPException
@@ -27,11 +25,6 @@ class ContactHeaderError(PySIPException):
 
 class ContactHeader(object):
     def __init__(self, contact_string=None):
-        '''
-        :param display_name: str
-        :param uri: Uri()
-        :param hparams: HParams()
-        '''
         self.display_name = None
         self.uri = Uri()
         self.uri.parser_impl = SIPUriParserUnicode()
@@ -41,18 +34,15 @@ class ContactHeader(object):
             self.display_name, self.uri, self.params, self.rest = self.parse_hdr(contact_string)
 
     def parse_contact_params(self, contact_params):
-        print(f'parse_contact_params({contact_params})')
         if contact_params.startswith(';'):
             return self.do_parse_contact_params(contact_params[1:])
         return HParams(), ''
 
     @staticmethod
     def do_parse_contact_params(string):
-        print(f'do_parse_contact_params({string})')
         try:
             hparams = HParams()
             params_list = parse_params(string, ';')
-            print(f'params_list: {params_list}')
             for k, v in params_list:
                 if k.lower() in (EXPIRES, Q):
                     hparams.set(k.lower(), ContactHeader.parse_param(k.lower(), v), k, v)
@@ -66,13 +56,11 @@ class ContactHeader(object):
 
     def parse_hdr(self, string):
         try:
-            print(f'parse_hdr({string})')
             nameaddr = NameAddress(string)
             display_name = nameaddr.display_name
             uri = nameaddr.uri
         except NameAddressError as e:
             raise ContactHeaderError(f'Cannot parse contact header {string} nameaddress part: {e}')
-        print(f'display_name: {display_name}, uri: {uri}, rest: {nameaddr.rest}')
         contact_params, rest = self.parse_contact_params(nameaddr.rest)
         return display_name, uri, contact_params, rest
 
@@ -89,7 +77,7 @@ class ContactHeader(object):
             raise ContactHeaderError(f'Cannot set expires parameter {expires_val}: not an integer')
 
     def get_qvalue(self, default=None):
-        qval =  self.params.find('q')
+        qval = self.params.find('q')
         if isinstance(qval, HParamNotFound):
             return default
         return qval
