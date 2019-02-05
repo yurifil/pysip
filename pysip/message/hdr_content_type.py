@@ -26,6 +26,11 @@ class ContentTypeHeader(object):
         if header is not None:
             self.mime_type, self.params = ContentTypeHeader.parse(header)
 
+    def __eq__(self, other):
+        if isinstance(other, ContentTypeHeader):
+            return self.mime_type == other.mime_type and self.params == other.params
+        return NotImplemented
+
     @staticmethod
     def parse(header):
         if isinstance(header, str):
