@@ -1,5 +1,4 @@
 from pysip import PySIPException
-from pysip.uri.uri_parser import SIPUriParserUnicode
 from pysip.message.parser_aux import parse_params, ParserAUXError
 
 
@@ -21,6 +20,17 @@ class HParams(object):
         self.parsed = {HParams.PARSED_NAMES_KEY: {}, HParams.LOWER_KEYS_KEY: {}}
         if isinstance(params, str):
             self.parse_raw(param_string=params)
+
+    def set_parsed(self, lower_key, parsed_name, parsed_value):
+        self.parsed[HParams.PARSED_NAMES_KEY][parsed_name] = (lower_key, parsed_value)
+        self.parsed[HParams.LOWER_KEYS_KEY][lower_key] = parsed_name
+
+    def parse_known(self, known_function):
+        for lower_key in self.order:
+            raw_key, raw_value = self.orig.get(lower_key)
+            parsed_key, parsed_value = known_function(lower_key, raw_value)
+            if parsed_key is not None:
+                self.set_parsed(lower_key, parsed_key, parsed_value)
 
     def parse_raw(self, param_string):
         try:
@@ -74,6 +84,15 @@ class HParams(object):
             return self.parsed[HParams.PARSED_NAMES_KEY][param_name.lower()][1]
         else:
             return HParamNotFound()
+
+    def to_list(self):
+        params_list = []
+        for param_name in self.order:
+            value = self.find(param_name)
+            if isinstance(value, HParamNotFound):
+                value = self.orig.get(param_name)[1]
+            params_list.append((param_name, value))
+        return params_list
 
     def __eq__(self, other):
         if isinstance(other, HParams):
@@ -225,11 +244,7 @@ new() ->
 
 
 
--spec set_parsed(lower_key(), parsed_name(), parsed_value(), hparams()) -> hparams().
-set_parsed(LowerKey, ParsedName, ParsedValue, #hparams{parsed = PMap0} = HParams) ->
-    PMap = PMap0#{ParsedName => {LowerKey, ParsedValue},
-                  LowerKey   => ParsedName},
-    HParams#hparams{parsed = PMap}.
+
 
 
 '''

@@ -119,21 +119,17 @@ class SIPUriParser(object):
         else:
             decoded_port = port
         if not self.is_valid_port(decoded_port):
-            raise PortParseError(f'Cannot parse port {port}')
+            raise PortParseError(f'Cannot parse port {port}: invalid value.')
         else:
             return decoded_port
 
     def parse_port(self, authority):
-        # print(f'port.Authority: {authority}')
         if authority is None:
             return None
         _, present, port = authority.rpartition(self.COLON)
-        # print(f'_: {_}, present: {present}, port: {port}')
-        if present and not port.lstrip(self.DIGITS):
-            # print(f'Port: {port}')
+        if present and not port.strip().lstrip(self.DIGITS):
             return self.validate_port(port)
         else:
-            # print(f'Port not found')
             return None
 
     # TODO: do this without recursion!
@@ -141,6 +137,8 @@ class SIPUriParser(object):
         if len(bytes_list) == 0:
             return False
         if len(bytes_list) == 1 and self.from_inner(self._normalize(bytes_list[0])).isalnum():
+            return True
+        if len(bytes_list) == 2 and self._normalize(bytes_list[0]) == self.DOT and self.from_inner(self._normalize(bytes_list[1])).isalnum():
             return True
         if self._normalize(bytes_list[0]) == self.DOT and self.from_inner(self._normalize(bytes_list[1])).isalnum():
             return self.domainlabel_valid(bytes_list[2:])
@@ -167,7 +165,6 @@ class SIPUriParser(object):
         return False
 
     def _check_host(self, host):
-        print(f'Checking host {host}')
         reversed_symbols = list(reversed(list(iter(host))))
         int_sym = reversed_symbols[0]
         sym = self._normalize(int_sym)
@@ -182,13 +179,10 @@ class SIPUriParser(object):
         return True
 
     def validate_host(self, host):
-        print(f'Host: {host}')
         if host.startswith(self.LBRACKET) and host.endswith(self.RBRACKET):
-            print(f'IP literal: {_ip_literal(host[1:-1])}')
             return _ip_literal(host[1:-1])
         elif host.startswith(self.LBRACKET) or host.endswith(self.RBRACKET):
             raise ValueError(f'Invalid host {host}')
-        print(f"IPv4: {_ipv4_address(host)} uridecode: {uridecode(host, 'utf-8', 'strict').lower()}")
         ret_host = _ipv4_address(host)
         if not ret_host:
             if self._check_host(host):
@@ -202,7 +196,7 @@ class SIPUriParser(object):
             return None
         _, _, hostinfo = authority.rpartition(self.AT)
         host, _, port = hostinfo.rpartition(self.COLON)
-        if port.lstrip(self.DIGITS):
+        if port.strip().lstrip(self.DIGITS):
             return self.validate_host(hostinfo)
         else:
             return self.validate_host(host)

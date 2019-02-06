@@ -9,6 +9,9 @@ PARAM_USER_IP = 'ip'
 PARAM_USER_PHONE = 'phone'
 PARAM_LR = 'lr'
 PARAM_TTL = 'ttl'
+PARAM_RECEIVED = 'received'
+PARAM_BRANCH = 'branch'
+PARAM_RPORT = 'rport'
 
 
 def _ip_literal(address):
