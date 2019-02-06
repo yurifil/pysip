@@ -143,6 +143,8 @@ def get_quoted_string_rest(string, state):
         return string[1:]
     if string[0] == '\\' and state == RAW_STATE:
         return get_quoted_string_rest(string[1:], state=ESCAPED_STATE)
+    if state == ESCAPED_STATE: # TODO: check that next value is <= 7F
+        return get_quoted_string_rest(string[1:], state=RAW_STATE)
     if state == RAW_STATE:
         return get_quoted_string_rest(string[1:], state=RAW_STATE)
 
@@ -150,12 +152,6 @@ def get_quoted_string_rest(string, state):
 def quoted_string(string):
     if not string:
         raise ParserAUXError('Not a quoted string: empty string')
-    '''
-        url_unquoted_string = unquote(string)
-        if QUOTED_STRING_RX.match(url_unquoted_string):
-            return True
-        return False
-        '''
     try:
         urlunquoted_string = unquote(string)
     except SyntaxError as e:
