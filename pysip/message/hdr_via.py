@@ -294,6 +294,17 @@ class ViaHeader(object):
 
     @staticmethod
     def parse_sent_by(sentby_str):
+        """Parses Via header sent by value out of string.
+
+        Args:
+            sentby_str (str): string that starts with sent_by host and port
+
+        Returns:
+            host, int:port and unparsed str:rest
+
+        Raises:
+            ViaHeaderError if sentby_str host and port are not rfc compliant.
+        """
         try:
             rx_match = ViaHeader.SENT_BY_RX.match(sentby_str)
             if rx_match:
@@ -307,6 +318,17 @@ class ViaHeader(object):
 
     @staticmethod
     def parse_sent_by_host_port(host_port):
+        """Parses Via header sent by host and port values out of string.
+
+        Args:
+            host_port (str)
+
+        Returns:
+            :obj:str||ipaddress:host, int:port
+
+        Raises:
+            ViaHeaderError if sentby_str host and port are not rfc compliant.
+        """
         try:
             return PARSER.parse_host(host_port), PARSER.parse_port(host_port)
         except Exception as e:
@@ -314,6 +336,17 @@ class ViaHeader(object):
 
     @staticmethod
     def parse_via_params(via_params_str):
+        """Parses Via header parameters out of string.
+
+        Args:
+            via_params_str (str)
+
+        Returns:
+            :obj:HParams: header parameters container with parsed parameters.
+
+        Raises:
+            ViaHeaderError if parameters cannot be parsed.
+        """
         if not via_params_str or not via_params_str.startswith(';'):
             return HParams(), via_params_str
         else:
@@ -399,6 +432,15 @@ class ViaHeader(object):
 
     @staticmethod
     def make_param_key(hparams):
+        """Helper function that returns comparable object of reduced HParams.
+
+        Args:
+            hparams (obj:HParams): header parameters container
+
+        Returns:
+            :obj:list: list of param_name, param_value pairs that can be compared to similar list.
+
+        """
         params_key = []
         for param_name, value in hparams.to_list():
             if param_name == PARAM_TTL:
@@ -429,6 +471,11 @@ class ViaHeader(object):
         return NotImplemented
 
     def assemble(self):
+        """Makes a string that represents Via header.
+
+        Returns:
+            str: Via header string.
+        """
         hparams_str = self.hparams.assemble()
         if hparams_str:
             hparams_str = f';{hparams_str}'
@@ -439,7 +486,7 @@ class ViaHeader(object):
 
     @property
     def has_rport(self):
-        """RPORT value.
+        """Is RPORT defined in Via header.
 
         Returns:
             bool: True if rport defined in Via parameters, False otherwise.
@@ -451,7 +498,7 @@ class ViaHeader(object):
 
     @property
     def rport(self):
-        """Received value.
+        """RPORT value.
 
         Returns:
             :obj:ipaddress || str: Received parameter. If no received is specified, None is returned.

@@ -7,7 +7,7 @@ import pytest
                                     b'INVITE,ACK,OPTIONS',
                                     b'INVITE'])
 def test_parse_success(values):
-    h = Header(b'Allow')
+    h = Header('Allow')
     h.add_value(values)
     parse_header(h)
 
@@ -15,6 +15,6 @@ def test_parse_success(values):
 @pytest.mark.parametrize('value', [b'', b'&'])
 def test_parse_fail(value):
     with pytest.raises(AllowError):
-        h = Header(b'Allow')
+        h = Header('Allow')
         h.add_value(value)
         parse_header(h)

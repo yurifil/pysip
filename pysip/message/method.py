@@ -15,10 +15,15 @@ class Method(object):
     def __init__(self, method):
         self.method = to_string(method)
         if not self._is_valid_token(self.method):
-            raise MethodError(f'Cannot parse method {self.method}: not a valid token.')
+            raise MethodError(f'Cannot parse method "{self.method}": not a valid token.')
 
     def __repr__(self):
         return self.method
+
+    def __eq__(self, other):
+        if isinstance(other, Method):
+            return self.method == other.method
+        return NotImplemented
 
     @staticmethod
     def _is_valid_token(string):

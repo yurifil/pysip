@@ -39,6 +39,14 @@ class SIPUriParser(object):
         return to_integer(val)
 
     def _is_valid_user(self, user):
+        """
+        Args:
+            user: user string.
+
+        Returns:
+            True if user is rfc compliant,
+            False otherwise.
+        """
         symbols = iter(user)
         if not user:
             return False
@@ -60,6 +68,14 @@ class SIPUriParser(object):
         return True
 
     def _is_valid_passwd(self, passwd):
+        """
+        Args:
+            passwd: password string.
+
+        Returns:
+            True if password is rfc compliant,
+            False otherwise.
+        """
         symbols = iter(passwd)
         for int_sym in symbols:
             sym = self._normalize(int_sym)
@@ -81,20 +97,49 @@ class SIPUriParser(object):
         return True
 
     def _check_userinfo(self, userinfo):
+        """
+        Args:
+            userinfo: <user>:<password> userinfo string.
+
+        Returns:
+            True if userinfo is rfc compliant,
+            False otherwise.
+        """
         splitted = userinfo.split(self.COLON)
-        print(f'Splitted userinfo: {splitted}')
         is_valid = self._is_valid_user(splitted[0])
-        print(f'Is valid user: {is_valid}')
         if len(splitted) > 1:
             is_valid = is_valid and self._is_valid_passwd(splitted[1])
         return is_valid
 
     def validate_user(self, user):
+        """Validates userinfo string.
+
+        Args:
+            user: userinfo string
+
+        Returns:
+            userinfo string
+
+        Raises:
+            UserParseError if userinfo is not rfc compliant.
+
+        """
         if not self._check_userinfo(user):
             raise UserParseError(f'Invalid userinfo: {user}')
         return user
 
     def parse_user(self, authority):
+        """Parses userinfo out of authority string.
+
+        Args:
+            authority: userinfo and present string.
+
+        Returns:
+            Valid userinfo string.
+
+        Raises:
+            UserParseError if userinfo is empty but authority string contains "@".
+        """
         print(f'Authority: {authority}')
         if authority is None:
             return None
@@ -109,11 +154,31 @@ class SIPUriParser(object):
 
     @staticmethod
     def is_valid_port(port):
+        """
+        Args:
+            port (int): port value.
+
+        Returns:
+            True if port is an integer in 0..65535 range,
+            False otherwise
+        """
         if 0 < port <= 65535:
             return True
         return False
 
     def validate_port(self, port):
+        """Validates port value.
+
+        Args:
+            port (int||str): port value.
+
+        Returns:
+            int: Valid port value.
+
+        Raises:
+            PortParseError if port value is not valid.
+
+        """
         if not isinstance(port, int):
             decoded_port = self._decode_int(port)
         else:
@@ -124,6 +189,15 @@ class SIPUriParser(object):
             return decoded_port
 
     def parse_port(self, authority):
+        """Parses port value out of authority string.
+
+        Args:
+            authority (str)
+
+        Returns:
+            int: Valid port value,
+            None: if no port can be found in authority string.
+        """
         if authority is None:
             return None
         _, present, port = authority.rpartition(self.COLON)
@@ -165,6 +239,14 @@ class SIPUriParser(object):
         return False
 
     def _check_host(self, host):
+        """
+        Args:
+            host (str): host string.
+
+        Returns:
+            True if host is rfc compliant,
+            False otherwise
+        """
         reversed_symbols = list(reversed(list(iter(host))))
         int_sym = reversed_symbols[0]
         sym = self._normalize(int_sym)
@@ -179,10 +261,22 @@ class SIPUriParser(object):
         return True
 
     def validate_host(self, host):
+        """
+        Args:
+            host:
+
+        Returns:
+            str: if host is a valid url,
+            obj:ipaddress.IPv4Address: if host is valid IPv4 address,
+            obj:ipaddress.IPv6Address: if host is valid IPv6 address.
+
+        Raises:
+            HostParseError: if host is neither a valid url, valid IPv4 address or valid IPv6 address.
+        """
         if host.startswith(self.LBRACKET) and host.endswith(self.RBRACKET):
             return _ip_literal(host[1:-1])
         elif host.startswith(self.LBRACKET) or host.endswith(self.RBRACKET):
-            raise ValueError(f'Invalid host {host}')
+            raise HostParseError(f'Invalid host {host}')
         ret_host = _ipv4_address(host)
         if not ret_host:
             if self._check_host(host):
@@ -192,6 +286,16 @@ class SIPUriParser(object):
         return ret_host
 
     def parse_host(self, authority):
+        """Parses valid host value from authority string.
+
+        Args:
+            authority (str)
+
+        Returns:
+            str: if host is a valid url,
+            obj:ipaddress.IPv4Address: if host is valid IPv4 address,
+            obj:ipaddress.IPv6Address: if host is valid IPv6 address.
+        """
         if authority is None:
             return None
         _, _, hostinfo = authority.rpartition(self.AT)
@@ -208,6 +312,17 @@ class SIPUriParser(object):
         return True
 
     def validate_scheme(self, scheme):
+        """Validates sip uri scheme.
+
+        Args:
+            scheme (str)
+
+        Returns:
+            str: valid scheme value.
+
+        Raises:
+            URIParseError: if scheme is no rfc compliant.
+        """
         if not self._is_valid_scheme(scheme):
             raise URIParseError('Invalid scheme')
         return scheme
@@ -278,6 +393,14 @@ class SIPUriParser(object):
             raise ParamParseError(f'Cannot parse {param}={value}: {e}')
 
     def parse_params(self, params_str):
+        """Parses parameters out of parameters string.
+
+        Args:
+            params_str (str)
+
+        Returns:
+            dict: if parameters string is rfc compliant.
+        """
         if not params_str:
             return None
         params = dict()

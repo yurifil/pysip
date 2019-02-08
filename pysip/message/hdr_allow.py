@@ -12,7 +12,7 @@ class AllowError(PySIPException):
 class AllowHeader(Header):
     def __init__(self, method_set):
         super().__init__(name=ALLOW_HEADER)
-        for method in method_set.method_set:
+        for method in method_set.to_list():
             self.add_value(method.method)
         self.method_set = method_set
 

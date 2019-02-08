@@ -1,17 +1,19 @@
 from collections import namedtuple
-from pysip.message.method import invite, bye, ack, cancel
+from pysip.message.method import INVITE, BYE, ACK, CANCEL
 
 
 class MethodSet(object):
     def __init__(self, method_list):
-        self.method_set = set(method_list)
+        self.method_dict = dict()
+        for m in method_list:
+            self.method_dict[m.method] = m
 
     def has(self, method):
-        return method in self.method_set
+        return method.method in self.method_dict
 
     def to_list(self):
-        return list(self.method_set)
+        return self.method_dict.values()
 
     @staticmethod
     def invite_set():
-        return MethodSet([invite(), bye(), ack(), cancel()])
+        return MethodSet([INVITE, BYE, ACK, CANCEL])
