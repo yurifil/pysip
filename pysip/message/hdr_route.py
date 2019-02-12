@@ -9,56 +9,6 @@ class RouteHeaderError(PySIPException):
     pass
 
 
-class RouteHeader(object):
-    def __init__(self, route_header=None):
-        self.route_set = list()
-        if route_header is not None:
-            self.route_set = self.parse(route_header)
-
-    def __eq__(self, other):
-        if isinstance(other, RouteHeader):
-            return self.route_set == other.route_set
-        return NotImplemented
-
-    @staticmethod
-    def parse(route_header):
-        if isinstance(route_header, Header):
-            route_set = list()
-            for val in route_header.values:
-                nameaddr, parsed_params = RouteHeader.parse_route(val)
-                route_set.append(Route(nameaddr, parsed_params))
-            return route_set
-        else:
-            raise RouteHeaderError(f'Cannot parse route {route_header}: should be type Header not {type(route_header)}')
-
-    @staticmethod
-    def parse_route(route):
-        try:
-            nameaddr = NameAddress(route)
-            parsed_params = RouteHeader.parse_route_params(nameaddr.rest.strip())
-            return nameaddr, parsed_params
-        except NameAddressError as e:
-            raise RouteHeaderError(f'Cannot parse route {route}: invalid nameaddress part ({e})')
-        except PySIPException as e:
-            raise RouteHeaderError(f'Cannot parse route {route}: {e}')
-
-    @staticmethod
-    def parse_route_params(params):
-        if not params:
-            return []
-        if params.startswith(';'):
-            return parse_params(params[1:], ';')
-        else:
-            raise RouteHeaderError(f'Cannot parse route parameters {params}: should start with ";"')
-
-    @property
-    def first(self):
-        if self.route_set:
-            return self.route_set[0]
-        else:
-            return None
-
-
 class Route(object):
     def __init__(self, nameaddr, params):
         self.nameaddr = nameaddr
@@ -88,8 +38,69 @@ class Route(object):
         return f'{nameaddr}{params}'
 
 
+class RouteHeader(object):
+    def __init__(self, route_header=None):
+        self.route_set = list()
+        if route_header is not None:
+            self.route_set = self.parse(route_header)
 
+    def __eq__(self, other):
+        if isinstance(other, RouteHeader):
+            return self.route_set == other.route_set
+        return NotImplemented
+
+    @staticmethod
+    def parse(route_header):
+        if isinstance(route_header, Header):
+            route_set = list()
+            for val in route_header.values:
+                nameaddr, parsed_params = RouteHeader.parse_route(val)
+                route_set.append(Route(nameaddr, parsed_params))
+            return route_set
+        elif isinstance(route_header, str):
+            nameaddr, parsed_params = RouteHeader.parse_route(route_header)
+            return [Route(nameaddr, parsed_params)]
+        else:
+            raise RouteHeaderError(f'Cannot parse route {route_header}: should be type Header not {type(route_header)}')
+
+    @staticmethod
+    def parse_route(route):
+        try:
+            nameaddr = NameAddress(route)
+            parsed_params = RouteHeader.parse_route_params(nameaddr.rest.strip())
+            return nameaddr, parsed_params
+        except NameAddressError as e:
+            raise RouteHeaderError(f'Cannot parse route {route}: invalid nameaddress part ({e})')
+        except PySIPException as e:
+            raise RouteHeaderError(f'Cannot parse route {route}: {e}')
+
+    @staticmethod
+    def parse_route_params(params):
+        if not params:
+            return []
+        if params.startswith(';'):
+            return parse_params(params[1:], ';')
+        else:
+            raise RouteHeaderError(f'Cannot parse route parameters {params}: should start with ";"')
+
+    @property
+    def first(self):
+        if self.route_set:
+            return self.route_set[0]
+        else:
+            return None
 '''
+-spec make_route(binary() | ersip_uri:uri()) -> route().
+make_route(Bin) when is_binary(Bin) ->
+    case parse_route(Bin) of
+        {ok, Route} ->
+            Route;
+        {error, _} = Error ->
+            error(Error)
+    end;
+make_route(URI) ->
+    #route{display_name = {display_name, []}, uri = URI}.
+
 -spec assemble_route(route()) -> iolist().
 assemble_route(#route{} = Route) ->
     #route{display_name = DN,
@@ -252,17 +263,6 @@ build(HdrName, {route_set, _} = RouteSet) ->
       end,
       Hdr,
       RouteSet).
-
--spec make_route(binary() | ersip_uri:uri()) -> route().
-make_route(Bin) when is_binary(Bin) ->
-    case parse_route(Bin) of
-        {ok, Route} ->
-            Route;
-        {error, _} = Error ->
-            error(Error)
-    end;
-make_route(URI) ->
-    #route{display_name = {display_name, []}, uri = URI}.
 
 %%%===================================================================
 %%% Helpers
