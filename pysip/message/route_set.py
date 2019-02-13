@@ -44,12 +44,3 @@ class RouteSet(object):
         if not self.is_empty():
             return self.routes[-1]
         raise RouteSetError(f'Cannot get last route: empty route set.')
-
-'''
-
--spec foldl(Fun, any(), route_set()) -> any() when
-      Fun :: fun((route(), any()) -> any()).
-foldl(Fun, Init, {route_set, R}) ->
-    lists:foldl(Fun, Init, R).
-
-'''

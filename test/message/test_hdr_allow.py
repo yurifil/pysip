@@ -1,5 +1,5 @@
 from pysip.message.hdr import Header
-from pysip.message.hdr_allow import parse_header, AllowError
+from pysip.message.hdr_allow import AllowHeader, AllowError
 import pytest
 
 
@@ -9,7 +9,8 @@ import pytest
 def test_parse_success(values):
     h = Header('Allow')
     h.add_value(values)
-    parse_header(h)
+    ah = AllowHeader()
+    ah.parse(h)
 
 
 @pytest.mark.parametrize('value', [b'', b'&'])
@@ -17,4 +18,5 @@ def test_parse_fail(value):
     with pytest.raises(AllowError):
         h = Header('Allow')
         h.add_value(value)
-        parse_header(h)
+        ah = AllowHeader()
+        ah.parse(h)

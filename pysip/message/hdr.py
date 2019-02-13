@@ -39,6 +39,18 @@ CANNOT_BE_COMMA_SEPARATED = (make_key('www-authenticate'), make_key('authorizati
 DO_NOT_USE_COMMA = (make_key('via'), make_key('contact'))
 
 
+class BaseSipHeader(object):
+    @staticmethod
+    def parse(header):
+        raise NotImplementedError
+
+    def assemble(self):
+        raise NotImplementedError
+
+    def build(self, header_name):
+        raise NotImplementedError
+
+
 class HeaderError(PySIPException):
     pass
 
@@ -60,6 +72,9 @@ class Header(object):
         if isinstance(other, Header) or issubclass(other.__class__, Header):
             return self.key == other.key and self.values == other.values
         return NotImplemented
+
+    def is_empty(self):
+        return len(self.values) == 0
 
     def add_value(self, val):
         if self.allow_multiple_values and self.key not in CANNOT_BE_COMMA_SEPARATED:

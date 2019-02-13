@@ -1,5 +1,6 @@
 from pysip import PySIPException
-from pysip.message.hdr import Header, HeaderError
+from pysip.message.hdr import Header, BaseSipHeader
+from pysip.message.hdr_contact import ContactHeader
 
 
 STAR = '*'
@@ -9,16 +10,60 @@ class ContactHeaderListError(PySIPException):
     pass
 
 
-class ContactHeaderList(object):
-    def __init__(self, string=None):
-        self.header = Header('Contact')
-        if string is not None:
-            self.header.add_value(string)
-            self.parse(self.header)
-        pass
+class ContactHeaderList(BaseSipHeader):
+    def __init__(self, contact_list=None):
+        self.contact_list = list()
+        if contact_list is not None:
+            self.contact_list = self.parse_contact_list(contact_list)
 
-    def parse(self, header):
-        pass
+    @staticmethod
+    def parse(contact_list):
+        return ContactHeaderList(contact_list)
+
+    def assemble(self):
+        raise NotImplementedError
+
+    def build(self, header_name):
+        hdr = Header(header_name)
+        if self.is_star():
+            hdr.add_value(STAR)
+        else:
+            for contact in self.contact_list:
+                hdr.add_value(contact.assemble())
+        return hdr
+
+    def is_star(self):
+        return self.contact_list == STAR
+
+    @staticmethod
+    def add_to_contact_list(contact_list_string, accumulator):
+        if contact_list_string.startswith(STAR):
+            raise ContactHeaderListError(f'Cannot parse contact list {contact_list_string}: multiple contacts and '
+                                         f'star are invalid')
+        try:
+            contact = ContactHeader(contact_list_string)
+        except Exception as e:
+            raise ContactHeaderListError(f'Cannot parse contact list {contact_list_string}: {e}')
+        accumulator.append(contact)
+        if not contact.rest.lstrip():
+            return accumulator
+        if contact.rest.startswith(','):
+            ContactHeaderList.add_to_contact_list(contact.rest[1:], accumulator)
+
+    @staticmethod
+    def parse_contact_list(contact_list):
+        ret_val = list()
+        if isinstance(contact_list, Header):
+            if contact_list.values[0] == STAR:
+                return STAR
+            for value in contact_list.values:
+                if value == STAR:
+                    raise ContactHeaderListError(f'Cannot parse contact list {contact_list}: multiple contacts and '
+                                                 f'star are invalid')
+                ContactHeaderList.add_to_contact_list(value, ret_val)
+        else:
+            raise ContactHeaderListError(f'Cannot parse contact list {contact_list}: should be of type Header')
+        return ret_val
 
 
 '''
@@ -61,6 +106,19 @@ add_to_maybe_contact_list(Bin, {ok, ContactList}) when is_list(ContactList) ->
             io:format("add_to_maybe_contact_list: ~p", [Bin]),
             Error
     end.
+
+-spec build(HeaderName :: binary(), contact_list()) -> ersip_hdr:header().
+build(HdrName, star) ->
+    Hdr = ersip_hdr:new(HdrName),
+    ersip_hdr:add_value(<<"*">>, Hdr);
+build(HdrName, ContactList) when is_list(ContactList) ->
+    Hdr = ersip_hdr:new(HdrName),
+    lists:foldl(
+      fun(Contact, HdrAcc) ->
+              ersip_hdr:add_value(ersip_hdr_contact:assemble(Contact), HdrAcc)
+      end,
+      Hdr,
+      ContactList).
 
 -module(ersip_hdr_contact_list).
 
@@ -105,18 +163,7 @@ make(Binary) ->
 make_star() ->
     star.
 
--spec build(HeaderName :: binary(), contact_list()) -> ersip_hdr:header().
-build(HdrName, star) ->
-    Hdr = ersip_hdr:new(HdrName),
-    ersip_hdr:add_value(<<"*">>, Hdr);
-build(HdrName, ContactList) when is_list(ContactList) ->
-    Hdr = ersip_hdr:new(HdrName),
-    lists:foldl(
-      fun(Contact, HdrAcc) ->
-              ersip_hdr:add_value(ersip_hdr_contact:assemble(Contact), HdrAcc)
-      end,
-      Hdr,
-      ContactList).
+
 
 
 %% Contact        =  ("Contact" / "m" ) HCOLON

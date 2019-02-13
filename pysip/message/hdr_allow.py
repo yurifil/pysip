@@ -1,5 +1,5 @@
 from pysip import PySIPException
-from pysip.message.hdr import Header
+from pysip.message.hdr import Header, BaseSipHeader
 from pysip.message.method import Method
 from pysip.message.method_set import MethodSet
 from pysip.message.hnames import ALLOW_HEADER
@@ -9,28 +9,37 @@ class AllowError(PySIPException):
     pass
 
 
-class AllowHeader(Header):
-    def __init__(self, method_set):
+class AllowHeader(Header, BaseSipHeader):
+    def __init__(self, method_set=None):
         super().__init__(name=ALLOW_HEADER)
-        for method in method_set.to_list():
-            self.add_value(method.method)
         self.method_set = method_set
+        if method_set is not None:
+            for method in method_set.to_list():
+                self.add_value(method.method)
 
     def build_header(self, header_name):
         h = Header(header_name)
         h.add_value(', '.join(self.method_set.to_list()))
 
+    @staticmethod
+    def parse(header):
+        if not header.values:
+            raise AllowError(f'Cannot parse header {header}: no values.')
+        method_list = list()
+        for val in header.values:
+            try:
+                method_list.append(Method(val))
+            except (ValueError, PySIPException) as e:
+                raise AllowError(f'{e}')
+        return AllowHeader(method_set=MethodSet(method_list))
 
-def parse_header(header):
-    if not header.values:
-        raise AllowError(f'Cannot parse header {header}: no values.')
-    method_list = list()
-    for val in header.values:
-        try:
-            method_list.append(Method(val))
-        except (ValueError, PySIPException) as e:
-            raise AllowError(f'{e}')
-    return AllowHeader(method_set=MethodSet(method_list))
+    def assemble(self):
+        return ', '.join(self.method_set.to_list())
+
+    def build(self, header_name):
+        hdr = Header(header_name)
+        hdr.add_value(self.assemble())
+        return hdr
 
 
 '''

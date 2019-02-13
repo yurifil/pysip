@@ -1,5 +1,4 @@
 from collections import namedtuple
-from pysip.binary import to_lower
 
 FROM_HEADER = 'from'
 TO_HEADER = 'to'

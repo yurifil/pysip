@@ -1,5 +1,5 @@
 from pysip import PySIPException
-from pysip.message.hdr import Header
+from pysip.message.hdr import Header, BaseSipHeader
 import datetime
 
 
@@ -25,9 +25,9 @@ class GMT(datetime.tzinfo):
         return 'GMT'
 
 
-class DateHeader(object):
+class DateHeader(BaseSipHeader):
     def __init__(self, date=None):
-        self._datetime = self.parse(date)
+        self._datetime = self.parse_date(date)
 
     @property
     def date(self):
@@ -46,7 +46,11 @@ class DateHeader(object):
         raise NotImplementedError
 
     @staticmethod
-    def parse(header):
+    def parse(date):
+        return DateHeader(date)
+
+    @staticmethod
+    def parse_date(header):
         if isinstance(header, Header):
             dt_str = ''.join(header.values)
         elif isinstance(header, str):
@@ -76,8 +80,8 @@ class DateHeader(object):
     def assemble(self):
         return self._datetime.strftime('%a, %d %b %Y %H:%M:%S %Z')
 
-    def build(self):
-        dt_header = Header('Date')
+    def build(self, header_name='Date'):
+        dt_header = Header(header_name)
         dt_header.add_value(self.assemble())
         return dt_header
 

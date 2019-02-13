@@ -1,5 +1,5 @@
 from pysip import PySIPException
-from pysip.message.hdr import Header
+from pysip.message.hdr import Header, BaseSipHeader
 from pysip.message.parser_aux import check_token
 
 
@@ -7,7 +7,7 @@ class OptTagListHeaderError(PySIPException):
     pass
 
 
-class OptTagListHeader(object):
+class OptTagListHeader(BaseSipHeader):
     def __init__(self, opttaglist=None):
         self.opt_tag_set = None
         if opttaglist is not None:
@@ -46,3 +46,8 @@ class OptTagListHeader(object):
 
     def assemble(self):
         return ', '.join(self.opt_tag_set)
+
+    def build(self, header_name):
+        hdr = Header(header_name)
+        hdr.add_value(self.assemble())
+        return hdr

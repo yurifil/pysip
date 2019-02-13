@@ -3,9 +3,6 @@ from pysip.message.pysip_id import token
 from pysip.binary import to_lower
 import re
 
-#rfc3261_branch_rx = re.compile(b'z9hG4bK.*')
-#rfc3261_branch_key_rx = re.compile(b'z9hg4bk.*')
-
 rfc3261_branch_rx = re.compile('z9hG4bK.*')
 rfc3261_branch_key_rx = re.compile('z9hg4bk.*')
 

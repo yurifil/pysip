@@ -1,6 +1,6 @@
 from pysip import PySIPException
 from pysip.message.method_unicode import Method
-from pysip.message.hdr import Header
+from pysip.message.hdr import Header, BaseSipHeader
 import re
 
 
@@ -8,7 +8,7 @@ class CSeqHeaderError(PySIPException):
     pass
 
 
-class CSeqHeader(object):
+class CSeqHeader(BaseSipHeader):
     CSEQ_RX = re.compile(r'\s*(\d+)\s+(.*)')
 
     def __init__(self, method=None, number=1, header=None):
@@ -18,7 +18,7 @@ class CSeqHeader(object):
         self.method = method
         self.number = number
         if header is not None:
-            self.parse(header)
+            self.parse_inner_impl(header)
 
     @property
     def number(self):
@@ -41,7 +41,6 @@ class CSeqHeader(object):
 
     @staticmethod
     def parse_cseq(cseq):
-        print(f'parse_cseq({cseq})')
         match_res = CSeqHeader.CSEQ_RX.match(cseq)
         if not match_res:
             raise CSeqHeaderError(f'Cannot parse {cseq}: invalid cseq')
@@ -53,7 +52,16 @@ class CSeqHeader(object):
             return CSeqHeader.parse_cseq(''.join(header.values))
         raise CSeqHeaderError(f'Cannot parse header {header}: no cseq.')
 
-    def parse(self, header):
+    @staticmethod
+    def parse(header):
+        cseq = CSeqHeader()
+        if isinstance(header, Header):
+            cseq._number, cseq.method = CSeqHeader.parse_hdr(header)
+        elif isinstance(header, str):
+            cseq._number, cseq.method = CSeqHeader.parse_cseq(header)
+        return cseq
+
+    def parse_inner_impl(self, header):
         if isinstance(header, Header):
             self._number, self.method = self.parse_hdr(header)
         elif isinstance(header, str):

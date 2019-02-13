@@ -1,5 +1,5 @@
 from pysip import PySIPException
-from pysip.message.hdr import Header
+from pysip.message.hdr import Header, BaseSipHeader
 from pysip.message.nameaddr import NameAddress, NameAddressError
 from pysip.message.parser_aux import parse_params
 from pysip.uri import PARAM_LR
@@ -38,11 +38,11 @@ class Route(object):
         return f'{nameaddr}{params}'
 
 
-class RouteHeader(object):
+class RouteHeader(BaseSipHeader):
     def __init__(self, route_header=None):
         self.route_set = list()
         if route_header is not None:
-            self.route_set = self.parse(route_header)
+            self.route_set = self.parse_route_header(route_header)
 
     def __eq__(self, other):
         if isinstance(other, RouteHeader):
@@ -50,7 +50,11 @@ class RouteHeader(object):
         return NotImplemented
 
     @staticmethod
-    def parse(route_header):
+    def parse(header):
+        return RouteHeader(header)
+
+    @staticmethod
+    def parse_route_header(route_header):
         if isinstance(route_header, Header):
             route_set = list()
             for val in route_header.values:
@@ -89,6 +93,12 @@ class RouteHeader(object):
             return self.route_set[0]
         else:
             return None
+
+    def build(self, header_name):
+        hdr = Header(header_name)
+        for r in self.route_set:
+            hdr.add_value(r.assemble())
+        return hdr
 '''
 -spec make_route(binary() | ersip_uri:uri()) -> route().
 make_route(Bin) when is_binary(Bin) ->

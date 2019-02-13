@@ -5,8 +5,8 @@ from pysip.uri.uri_parser import SIPUriParserUnicode
 from pysip.uri import PARAM_TTL, PARAM_MADDR, PARAM_RECEIVED, PARAM_BRANCH, PARAM_RPORT
 from ipaddress import IPv4Address, IPv6Address
 from pysip.message.parser_aux import parse_token, parse_slash, parse_non_negative_integer
-from pysip.uri.transport import Transport, TransportError
-from pysip.message.hdr import Header
+from pysip.uri.transport import Transport
+from pysip.message.hdr import Header, BaseSipHeader
 import re
 import ipaddress
 
@@ -79,7 +79,7 @@ class ViaHeaderError(PySIPException):
     pass
 
 
-class ViaHeader(object):
+class ViaHeader(BaseSipHeader):
     """
     Args:
         via (:obj: Header || str): VIA header to be parsed.
@@ -107,6 +107,10 @@ class ViaHeader(object):
             self._sent_by = SentBy(host=sent_by_host, port=sent_by_port)
             self.hparams = via_params
 
+    @staticmethod
+    def parse(via_hdr):
+        return ViaHeader.topmost_via(via_hdr)
+
     def get_raw_param(self, param_name):
         """Get raw parameter value.
 
@@ -130,14 +134,6 @@ class ViaHeader(object):
     def ttl(self, value):
         ttl, parsed_value = self.parse_known_param_fun(PARAM_TTL, value)
         self.hparams.set(PARAM_TTL, parsed_value, PARAM_TTL, value)
-
-    @property
-    def maddr(self):
-        """maddr value"""
-        maddr = self.hparams.find(PARAM_MADDR)
-        if not isinstance(maddr, HParamNotFound):
-            return maddr
-        return None
 
     @property
     def sent_by(self):
@@ -507,6 +503,9 @@ class ViaHeader(object):
         if not isinstance(rport, HParamNotFound):
             return rport
         return None
+
+    def build(self, header_name):
+        raise NotImplementedError
 
 '''
 rport(#via{hparams = HParams}) ->

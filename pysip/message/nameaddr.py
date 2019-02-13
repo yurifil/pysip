@@ -1,7 +1,6 @@
 import re
 from pysip import PySIPException
 from pysip.uri.uri import Uri
-from pysip.uri.uri_parser import SIPUriParserUnicode
 import pysip.message.parser_aux as parser_aux
 
 

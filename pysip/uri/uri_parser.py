@@ -81,8 +81,6 @@ class SIPUriParser(object):
             sym = self._normalize(int_sym)
             # TODO: this ought to be really slow. Fix this.
             if self.from_inner(sym).isalnum() or sym in self.MARK or sym in self.PASSWD_UNRESERVED:
-                print(f'Sym {sym} isalnum: {self.from_inner(sym).isalnum()}')
-                print('Continuing')
                 continue
             elif sym == self.PERCENT_SIGN:
                 try:
@@ -140,12 +138,10 @@ class SIPUriParser(object):
         Raises:
             UserParseError if userinfo is empty but authority string contains "@".
         """
-        print(f'Authority: {authority}')
         if authority is None:
             return None
         else:
             userinfo, present, _ = authority.rpartition(self.AT)
-            print(f'Userinfo: {userinfo}. Present: {present}. Rest: {_}')
             if not userinfo:
                 if present:
                     raise UserParseError(f'Invalid (empty) userinfo in authority {authority}')
@@ -336,7 +332,6 @@ class SIPUriParser(object):
         params = None
         headers = None
         (scheme, authority, path, query, fragment) = self.RX.match(uri_str).groups()
-        print(f'scheme: {scheme}, authority: {authority}, path: {path}, query: {query}, fragment: {fragment}')
         if self.SEMICOLON in authority:
             hostport, present, rest = authority.partition(self.SEMICOLON)
             params = rest
@@ -344,7 +339,6 @@ class SIPUriParser(object):
             hostport = authority
         if query:
             headers = query
-        print(f'scheme: {scheme}, hostport: {hostport}, params: {params}, headers: {headers}')
         return scheme, hostport, params, headers
 
     def _validate_transport(self, transport):
@@ -413,7 +407,6 @@ class SIPUriParser(object):
                 value = None
             param, value = self._validate_param(param, value)
             params[param] = value
-        print(f'Parsed params: {params}')
         return params
 
     def _validate_header(self, header, value):
@@ -432,7 +425,6 @@ class SIPUriParser(object):
                 value = None
             header, value = self._validate_header(header, value)
             headers[header] = value
-        print(f'Parsed headers: {headers}')
         return headers
 
     def parse(self, uri_str):
