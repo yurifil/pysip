@@ -21,6 +21,12 @@ class CallIDHeader(BaseSipHeader):
             raise CallIDError(f'Cannot parse callid {callid}: callid should be of type str or '
                               f'{Header.__class__.__name__}, but it is of type {type(callid)}')
 
+    def __eq__(self, other):
+        print(f'CallIDHeader.__eq__: {self.call_id} == {other.call_id}')
+        if isinstance(other, CallIDHeader):
+            return self.call_id == other.call_id
+        return NotImplemented
+
     @staticmethod
     def is_word_char(char):
         return char.isalnum() or char in WORD_CHARS
@@ -43,7 +49,7 @@ class CallIDHeader(BaseSipHeader):
         callid = ''
         for val in header.values:
             callid += val
-        return CallIDHeader.parse(callid)
+        return CallIDHeader.parse_callid(callid)
 
     @staticmethod
     def parse_callid(callid):

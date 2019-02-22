@@ -1,5 +1,6 @@
 from pysip import PySIPException
-from pysip.message.method_unicode import Method
+#from pysip.message.method_unicode import Method
+from pysip.message.method import Method
 from pysip.message.hdr import Header, BaseSipHeader
 import re
 

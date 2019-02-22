@@ -1,5 +1,5 @@
 from pysip.binary import to_integer, to_string, to_bytes
-from pysip.message.hnames import make_key
+from pysip.message.hnames import make_key, HeaderKey, PRINT_FORM_MAP
 from pysip import PySIPException
 
 
@@ -60,6 +60,8 @@ class Header(object):
     COMMA = ','
 
     def __init__(self, name):
+        if isinstance(name, HeaderKey):
+            name = PRINT_FORM_MAP.get(name, name.header)
         self.name = to_string(name, encoding=self.ENCODING)
         self.values = []
         self.key = make_key(self.name)

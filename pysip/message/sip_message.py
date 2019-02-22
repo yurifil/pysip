@@ -1,16 +1,46 @@
-from pysip.message.hnames import FROM_HEADER, TO_HEADER, CALLID_HEADER, CSEQ_HEADER, MAXFORWARDS_HEADER, VIA_HEADER, \
-    ALL_KNOWN_HEADERS
 from pysip import PySIPException
-from pysip.message.message import TYPE_REQUEST, TYPE_RESPONSE
-from pysip.message.status import reason_phrase
-from pysip.message.hdr import Header
-from pysip.message.sip_hdr import parse_header, set_header, copy_header, remove_header, set_raw_header, \
-    SipHeaderError, NoHeader
 from pysip.uri.uri import Uri
+from pysip.transport.buffer import MAX_MESSAGE_LENGTH_UNLIMITED, MoreDataRequired, new_dgram
+from pysip.message.hnames import FROM_HEADER, TO_HEADER, CALLID_HEADER, CSEQ_HEADER, MAXFORWARDS_HEADER, VIA_HEADER, \
+    KNOWN_HEADER_KEY_MAP, ALL_KNOWN_HEADERS_KEYS, PRINT_FORM_MAP
+from pysip.message.method import Method, MethodError
+from pysip.message.hdr import Header, BaseSipHeader
+from pysip.message.hnames import make_key
+from pysip.message.message import TYPE_REQUEST, TYPE_RESPONSE, RequestType, ResponseType, Message
+from pysip.message.hdr_fromto import FromToHeader
+from pysip.message.hdr_cseq import CSeqHeader
+from pysip.message.hdr_callid import CallIDHeader
+from pysip.message.hdr_maxforwards import MaxForwardsHeader
+from pysip.message.hdr_via import ViaHeader
+from pysip.message.hdr_content_type import ContentTypeHeader
+from pysip.message.hdr_route import RouteHeader
+from pysip.message.hdr_allow import AllowHeader
+from pysip.message.hdr_opttag_list import OptTagListHeader
+from pysip.message.hdr_contact_list import ContactHeaderList
+from pysip.message.hdr_expires import ExpiresHeader
+from pysip.message.hdr_date import DateHeader
+from pysip.reply import ReplyOptions, AUTO
+from pysip.message.pysip_id import generate_token
+
+import re
 
 
-ALL = 'all'
+REQUIRED_REQUESTS = 'requests'
+REQUIRED_WITH_BODY = 'with_body'
+REQUIRED_ALL = 'all'
+REQUIRED_OPTIONAL = 'optional'
+
+
+STATE_FIRST_LINE = 'first_line'
+STATE_HEADERS = 'headers'
+STATE_BODY = 'body'
+
+DEFAULT_OPTIONS = {'buffer': dict(), 'max_message_len': 8192}
+
+
+ALL = 'ALL'
 # TODO: add type annotations here and there
+# TODO: SipHeader interface is ugly, refactor needed
 
 
 class SIPMessageParseError(PySIPException):
@@ -27,14 +57,65 @@ class NotFound(object):
 
 class SipMessage(object):
     def __init__(self, message=None):
-        self.raw_message = None
+        """Provides parse and validation routines and simple reply interface for SIP messages.
+        Fields:
+            raw_message (Message) - Message instance containing raw message
+            method (Method) - SIP method parsed from request line for requests or from CSeq header for responses
+            headers (dict) - dict of headers: keys are HdrKey objects, values are parsed headers
+            user (str) - user data
+        """
+        if message is None:
+            message = Message()
+        self.raw_message = message
         self.method = None
         self._ruri = None
         self.headers = dict()
+        self.user = None
+
+    @property
+    def user_data(self):
+        """
+        Raises:
+            SipMessageError if no user data defined.
+        """
+        if self.user is None:
+            raise SipMessageError(f'No user data')
+        return self.user
+
+    @user_data.setter
+    def user_data(self, data):
+        self.user = data
+
+    def serialize(self):
+        """
+        Returns:
+            String representation of SIP message.
+        """
+        return self.raw_message.serialize()
+
+    def clear_user_data(self):
+        """Resets SIP message user data"""
+        self.user = None
 
     @property
     def type(self):
         return self.raw_message.type
+
+    @type.setter
+    def type(self, type_str):
+        """
+        Args:
+            type_str (str)
+
+        Raises:
+            SipMessageError if type_str != request and type_str != response
+        """
+        if type_str == TYPE_RESPONSE:
+            self.raw_message.type = ResponseType()
+        elif type_str == TYPE_REQUEST:
+            self.raw_message.type = RequestType()
+        else:
+            raise SipMessageError(f'Cannot set type {type_str}: invalid type')
 
     @property
     def ruri(self):
@@ -43,7 +124,8 @@ class SipMessage(object):
     @ruri.setter
     def ruri(self, uri):
         self._ruri = uri
-        self.raw_message.ruri = uri.assemble()
+        if uri is not None:
+            self.raw_message.ruri = uri.uri
 
     @property
     def status(self):
@@ -54,6 +136,13 @@ class SipMessage(object):
 
     @status.setter
     def status(self, status):
+        """
+        Args:
+            status (int)
+
+        Raises:
+            SipMessageError if SIP message type is request
+        """
         if self.type == TYPE_REQUEST:
             raise SipMessageError(f'Cannot set status for request {self}')
         elif self.type == TYPE_RESPONSE:
@@ -81,28 +170,49 @@ class SipMessage(object):
 
     @property
     def topmost_via(self):
-        return self.get('topmost_via')
+        return self.get(VIA_HEADER)
 
     @property
     def reason(self):
+        """
+        Returns:
+            None if SIP message is request
+            :str: reason from raw message (Message).
+        """
         if self.type == TYPE_RESPONSE:
             return self.raw_message.reason
         elif self.type == TYPE_REQUEST:
             return None
 
     def find(self, header):
-        if header in self.headers:
-            return self.headers[header]
+        """Find specified header
+
+        Args:
+            header (str or HeaderKey)
+
+        Returns:
+            BaseSipHeader subclass instance
+        """
+        if make_key(header) in self.headers:
+            return self.headers[make_key(header)]
         else:
             try:
-                hdr = parse_header(header, self)
+                hdr = SipHeader.parse_header(header, self)
             except SipHeaderError as e:
                 raise e
-            if not hdr:
+            if not hdr or isinstance(hdr, NoHeader):
                 return NotFound()
             return hdr
 
     def get(self, header):
+        """Gets header specified by header name.
+
+        Args:
+            header (str or HeaderKey)
+
+        Returns:
+            BaseSipHeader subclass instance
+        """
         try:
             hdr = self.find(header)
         except Exception as e:
@@ -112,606 +222,681 @@ class SipMessage(object):
         return hdr
 
     def set(self, header_name, header_value):
-        set_header(header_name, header_value, self)
+        """Sets SipMessage header to specified value.
+
+        Args:
+            header_name (str)
+            header_value (BaseSipHeader subclass instance)
+        """
+        SipHeader.set_header(header_name, header_value, self)
 
     @staticmethod
     def copy(header_name, src_msg, dst_msg):
-        copy_header(header_name, src_msg, dst_msg)
+        """Copies specified header from source SIP message to destination SIP message
+
+        Args:
+            header_name (str)
+            src_msg (SipMessage)
+            dst_msg (SipMessage)
+        """
+        SipHeader.copy_header(header_name, src_msg, dst_msg)
 
     def remove(self, header_name):
-        remove_header(header_name, self)
+        """Removes specified header from SIP message.
+
+        Args:
+            header_name (str or HeaderKey): header name to be removed.
+        """
+        SipHeader.remove_header(header_name, self)
 
     def has_body(self):
-        return not self.raw_message.is_empty()
+        """Returns:
+            True if SIP message body is not empty,
+            False otherwise.
+        """
+        return self.raw_message.body
 
     def remove_body(self):
+        """Resets SIP message body."""
         self.raw_message.body = ''
 
     def raw_header(self, header_name):
-        self.raw_message.get(header_name)
+        """Get raw header.
+
+        Args:
+            header_name (str)
+
+        Returns:
+            Header object from SipMessage.raw_message
+        """
+        return self.raw_message.get(header_name)
 
     def set_raw_header(self, raw_header):
-        set_raw_header(raw_header, self)
+        """Sets raw header to SIP message.
+
+        Args:
+            raw_header (Header)
+        """
+        SipHeader.set_raw_header(raw_header, self)
 
     @staticmethod
     def parse(message, headers_list):
+        """Parses specified headers from string, SipMessage or Message objects and sets it to SIP message.
+
+        Args:
+            message (str or Message or SipMessage)
+            headers_list (list or ALL): headers to be parsed
+
+        Returns:
+            :obj:SipMessage
+        """
         if isinstance(message, SipMessage):
             known_headers = headers_list
             if headers_list == ALL:
-                known_headers = ALL_KNOWN_HEADERS
+                known_headers = KNOWN_HEADER_KEY_MAP.values()
             already_parsed = message.headers.keys()
             headers_to_parse = set(known_headers).difference(set(already_parsed))
             for header in headers_to_parse:
-                maybe_parse_header()
+                SipMessage.maybe_parse_header(header, message)
+            return message
         elif isinstance(message, str):
-            p = pysip_parser.new_dgram(message)
+            p = Parser.new_dgram(message)
             try:
-                parsed_msg = pysip.parser.parse(p)
+                parsed_msg, data = Parser.parse(p)
             except Exception as e:
                 raise SipMessageError(f'Cannot parse message {message}: {e}')
-            if parsed_msg.more_data():
+            if isinstance(parsed_msg, MoreDataRequired):
                 raise SipMessageError(f'Cannot parse message {message}: truncated message.')
             return SipMessage.parse(parsed_msg, headers_list)
-        else:
-            known_headers = headers_list
+        elif isinstance(message, Message):
+            headers_to_parse = headers_list
             if headers_list == ALL:
-                known_headers = ALL_KNOWN_HEADERS
+                headers_to_parse = KNOWN_HEADER_KEY_MAP.keys()
             maybe_msg = SipMessage.create_from_raw(message)
-            for header in headers_list:
-                maybe_parse_header()
-
-
-'''
-%% @doc Parse Raw message and transform it to SIP message or parse
-%% additional headers of SIP message.
--spec parse(ersip_msg:message() | sipmsg() | binary() | iolist(), [known_header()] | all) -> Result when
-      Result :: {ok, sipmsg()}
-              | {error, term()}.
-parse(#sipmsg{} = SipMsg, all) ->
-    AlreadyParsed = maps:keys(headers(SipMsg)),
-    HeadersToParse = ersip_siphdr:all_known_headers() -- AlreadyParsed,
-    MaybeMsg = {ok, SipMsg},
-    lists:foldl(fun maybe_parse_header/2, MaybeMsg, HeadersToParse);
-parse(#sipmsg{} = SipMsg, Headers) ->
-    AlreadyParsed = maps:keys(headers(SipMsg)),
-    HeadersToParse = Headers -- AlreadyParsed,
-    MaybeMsg = {ok, SipMsg},
-    lists:foldl(fun maybe_parse_header/2, MaybeMsg, HeadersToParse);
-parse(SipMsgBin, What) when is_binary(SipMsgBin) ->
-    P  = ersip_parser:new_dgram(SipMsgBin),
-    case ersip_parser:parse(P) of
-        {{ok, PMsg}, _P2} ->
-            parse(PMsg, What);
-        {{error, Reason}, _} ->
-            {error, {generic_parse_error, Reason}};
-        {more_data, _} ->
-            {error, truncated_message}
-    end;
-parse(RawMsg, all) ->
-    parse(RawMsg, ersip_siphdr:all_known_headers());
-parse(RawMsg, Headers) ->
-    MaybeMsg0 = create_from_raw(RawMsg),
-    MaybeMsg1 = lists:foldl(fun maybe_parse_header/2, MaybeMsg0, Headers),
-    lists:foldl(fun({ValFun, ErrorType}, {ok, SipMsg} = MaybeMsg) ->
-                        case ValFun(SipMsg) of
-                            true ->
-                                MaybeMsg;
-                            false ->
-                                {error, {ErrorType, SipMsg}}
-                        end;
-                   (_, {error, _} = Error) ->
-                        Error
-                end,
-                MaybeMsg1,
-                [{fun parse_validate_cseq/1, invalid_cseq}]).
-
-
--spec raw_message(sipmsg()) -> ersip_msg:message().
-raw_message(#sipmsg{raw = R}) ->
-    R.
-
--spec raw_header(HdrName :: binary(), sipmsg()) -> ersip_hdr:header().
-raw_header(HdrName, #sipmsg{} = Msg) when is_binary(HdrName) ->
-    ersip_msg:get(HdrName, raw_message(Msg)).
-
--spec set_raw_header(ersip_hdr:header(), sipmsg()) -> {ok, ersip_sipmsg:sipmsg()} | {error, term()}.
-set_raw_header(RawHdr, #sipmsg{} = SipMsg) ->
-    ersip_siphdr:set_raw_header(RawHdr, SipMsg).
-
--spec remove_body(sipmsg()) -> sipmsg().
-remove_body(#sipmsg{} = SipMsg) ->
-    RawMsg = raw_message(SipMsg),
-    RawMsgNoBody = ersip_msg:set(body, [], RawMsg),
-    set_raw_message(RawMsgNoBody, SipMsg).
-    
-
--spec has_body(sipmsg()) -> boolean().
-has_body(#sipmsg{} = Msg) ->
-    not ersip_iolist:is_empty(ersip_msg:get(body, raw_message(Msg))).
-
--spec remove(ersip_hnames:name_forms(), sipmsg()) -> sipmsg().
-remove(HdrName, SipMsg) ->
-    ersip_siphdr:remove_header(HdrName, SipMsg).
-
--spec copy(ersip_hnames:name_forms(), Src :: sipmsg(), Dst :: sipmsg()) -> sipmsg().
-copy(HdrNameForm, #sipmsg{} = SrcMsg, #sipmsg{} = DstMsg) ->
-    ersip_siphdr:copy_header(HdrNameForm, SrcMsg, DstMsg).
-
-set(HdrAtom, Value, #sipmsg{} = Msg) ->
-    ersip_siphdr:set_header(HdrAtom, Value, Msg).
-
--spec find(known_header(), sipmsg()) -> Result when
-      Result :: {ok, term()}
-              | not_found
-              | {error, term()}.
-find(HdrAtom, #sipmsg{headers = H} = Msg) ->
-    case maps:find(HdrAtom, H) of
-        {ok, Value} ->
-            {ok, Value};
-        error ->
-            case ersip_siphdr:parse_header(HdrAtom, Msg) of
-                {ok, no_header} ->
-                    not_found;
-                {ok, Value} ->
-                    {ok, Value};
-                {error, {no_required_header, _}} ->
-                    not_found;
-                {error, _ } = Error ->
-                    Error
-            end
-    end.
-
--spec get(known_header(), sipmsg()) -> Value when
-      Value :: term().
-get(HdrAtom, #sipmsg{} = Msg) ->
-    case find(HdrAtom, Msg) of
-        {ok, Value} ->
-            Value;
-        not_found ->
-            error({error, {no_header, HdrAtom}});
-        {error, _} = Error ->
-            error(Error)
-    end.
-
--spec callid(sipmsg()) -> ersip_hdr_callid:callid().
-callid(#sipmsg{} = SipMsg) ->
-    get(callid, SipMsg).
-
--spec cseq(sipmsg()) -> ersip_hdr_cseq:cseq().
-cseq(#sipmsg{} = SipMsg) ->
-    get(cseq, SipMsg).
-
--spec maxforwards(sipmsg()) -> ersip_hdr_maxforwards:maxforwards().
-maxforwards(#sipmsg{} = SipMsg) ->
-    get(maxforwards, SipMsg).
-
--spec topmost_via(sipmsg()) -> ersip_hdr_via:via().
-topmost_via(#sipmsg{} = SipMsg) ->
-    get(topmost_via, SipMsg).
-
--spec reason(ersip_sipmsg:sipmsg()) -> undefined | binary().
-reason(#sipmsg{} = SipMsg) ->
-    case type(SipMsg) of
-        request ->
-            undefined;
-        response ->
-            ersip_msg:get(reason, raw_message(SipMsg))
-    end.
-    
--spec from(sipmsg()) -> ersip_hdr_fromto:fromto().
-from(#sipmsg{} = SipMsg) ->
-    get(from, SipMsg).
-
--spec to(sipmsg()) -> ersip_hdr_fromto:fromto().
-to(#sipmsg{} = SipMsg) ->
-    get(to, SipMsg).
-    
--spec type(ersip_sipmsg:sipmsg()) -> ersip_msg:type().
-type(#sipmsg{} = Msg) ->
-    ersip_msg:get(type, raw_message(Msg)).
-
--spec method(ersip_sipmsg:sipmsg()) -> ersip_method:method().
-method(#sipmsg{method = Method}) ->
-    Method.
-
--spec ruri(ersip_sipmsg:sipmsg()) -> ersip_uri:uri().
-ruri(#sipmsg{ruri = RURI}) ->
-    RURI.
-
--spec set_ruri(ersip_uri:uri(), sipmsg()) -> sipmsg().
-set_ruri(URI, #sipmsg{} = SipMsg) ->
-    SipMsg0 = SipMsg#sipmsg{ruri = URI},
-    RawMsg = ersip_msg:set(ruri, ersip_uri:assemble(URI), raw_message(SipMsg0)),
-    set_raw_message(RawMsg, SipMsg0).
-
--spec status(ersip_sipmsg:sipmsg()) -> undefined | ersip_status:code().
-status(#sipmsg{} = SipMsg) ->
-    case type(SipMsg) of
-        request ->
-            undefined;
-        response ->
-            ersip_msg:get(status, raw_message(SipMsg))
-    end.
-
--spec set_status(ersip_status:code(), ersip_sipmsg:sipmsg()) -> ersip_sipmsg:sipmsg().
-set_status(Code, #sipmsg{} = SipMsg) ->
-    case type(SipMsg) of
-        request ->
-            error({api_error, {<<"cannot set status of request">>, SipMsg}});
-        response ->
-            RawMsg = ersip_msg:set(status, Code, raw_message(SipMsg)),
-            set_raw_message(RawMsg, SipMsg)
-    end.
-%%
-%% Copyright (c) 2018 Dmitry Poroh
-%% All rights reserved.
-%% Distributed under the terms of the MIT License. See the LICENSE file.
-%%
-%% SIP message
-%%
-%% Contains raw message (if any) and parsed headers.
-%%
-
--module(ersip_sipmsg).
-
-%% API exports
--export([%% First line manipulation:
-         type/1,
-         method/1,
-         ruri/1,
-         set_ruri/2,
-         status/1,
-         set_status/2,
-         reason/1,
-
-         %% Required headers. Function raise error if message does not
-         %% contain corresponding header.
-         from/1,
-         to/1,
-         callid/1,
-         cseq/1,
-         maxforwards/1,
-         topmost_via/1,
-
-         %% Headers manipulation:
-         find/2,
-         get/2,
-         set/3,
-         copy/3,
-         remove/2,
-
-         %% Body manipulation:
-         has_body/1,
-         remove_body/1,
-
-         %% Underlying message manipulation:
-         raw_message/1,
-         raw_header/2,
-         set_raw_header/2,
-
-         %% Parse and build message
-         parse/2,
-         serialize/1,
-         serialize_bin/1,
-
-         %% SIP-specific
-         new_request/2,
-         reply/2,
-
-         %% Metadata manipulation:
-         source/1,
-         user_data/1,
-         set_user_data/2,
-         clear_user_data/1
-        ]).
-
-%% Non-API exports.
--export([headers/1,
-         set_headers/2,
-         set_raw_message/2]).
-
--export_type([sipmsg/0,
-              known_header/0
-             ]).
-%%%===================================================================
-%%% Types
-%%%===================================================================
-
--record(sipmsg, {raw = undefined :: ersip_msg:message(),
-                 method          :: ersip_method:method(),
-                 ruri            :: ersip_uri:uri() | undefined,
-                 headers = #{}   :: headers(),
-                 user            :: term() %% User data carried with message
-                }).
-
--type sipmsg()       :: #sipmsg{}.
--type known_header() :: ersip_siphdr:known_header().
--type headers()      :: #{from         => ersip_hdr_fromto:fromto(),
-                          to           => ersip_hdr_fromto:fromto(),
-                          callid       => ersip_hdr_callid:callid(),
-                          cseq         => ersip_hdr_cseq:cseq(),
-                          maxforwards  => ersip_hdr_maxforwards:maxforwards(),
-                          topmost_via  => ersip_hdr_via:via()
-                         }.
-
-%%%===================================================================
-%%% API
-%%%===================================================================
-
-
-
-
-
-
--spec set(known_header(), Value :: term(), sipmsg()) -> Value when
-      Value :: term().
-
-
-
-
-
-
-
-
--spec serialize(sipmsg()) -> iolist().
-serialize(#sipmsg{} = SipMsg) ->
-    ersip_msg:serialize(raw_message(SipMsg)).
-
--spec serialize_bin(sipmsg()) -> binary().
-serialize_bin(#sipmsg{} = SipMsg) ->
-    iolist_to_binary(serialize(SipMsg)).
-
-%% Creating new request. To be more generic headers (even required)
-%% are not automatically generated.
--spec new_request(ersip_method:method(), ersip_uri:uri()) -> sipmsg().
-new_request(Method, RURI) ->
-    RawMsg = ersip_msg:new(),
-    RawMsg1 = ersip_msg:set([{type,   request},
-                             {method, Method},
-                             {ruri,   ersip_uri:assemble(RURI)}],
-                            RawMsg),
-    #sipmsg{raw    = RawMsg1,
-            method = Method,
-            ruri   = RURI
-           }.
-
--spec reply(ersip_reply:options() | ersip_status:code(), sipmsg()) -> sipmsg().
-reply(Code, #sipmsg{} = SipMsg) when is_integer(Code) andalso Code >= 100 andalso Code =< 699 ->
-    reply_impl(ersip_reply:new(Code), SipMsg);
-reply(Reply, #sipmsg{} = SipMsg) ->
-    reply_impl(Reply, SipMsg).
-
--spec source(sipmsg()) -> undefined | ersip_source:source().
-source(#sipmsg{} = SipMsg) ->
-    ersip_msg:source(raw_message(SipMsg)).
-
--spec user_data(sipmsg()) -> term().
-user_data(#sipmsg{user = undefined}) ->
-    error({error, no_user_data});
-user_data(#sipmsg{user = {set, User}}) ->
-    User.
-
--spec set_user_data(term(), sipmsg()) -> sipmsg().
-set_user_data(Data, #sipmsg{} = SipMsg) ->
-    SipMsg#sipmsg{user = {set, Data}}.
-
--spec clear_user_data(sipmsg()) -> sipmsg().
-clear_user_data(#sipmsg{} = SipMsg) ->
-    SipMsg#sipmsg{user = undefined}.
-
-%%%===================================================================
-%%% Internal implementation
-%%%===================================================================
-
--spec set_raw_message(ersip_msg:message(), sipmsg()) -> sipmsg().
-set_raw_message(RawMsg, #sipmsg{} = SipMsg) ->
-    SipMsg#sipmsg{raw = RawMsg}.
-
--spec new_reply(Status, Reason, Method) -> sipmsg() when
-      Status :: ersip_status:code(),
-      Reason :: ersip_status:reason() | undefined,
-      Method :: ersip_method:method().
-new_reply(Status, Reason, Method) ->
-    RawMsg = ersip_msg:new(),
-    RawMsg1 = ersip_msg:set([{type,   response},
-                             {status, Status},
-                             {reason, Reason}],
-                            RawMsg),
-    #sipmsg{raw    = RawMsg1,
-            method = Method,
-            ruri   = undefined
-           }.
-
-%%%
-%%% Getters/Setters
-%%%
--spec headers(sipmsg()) -> headers().
-headers(#sipmsg{headers = H}) ->
-    H.
-
--spec set_headers(headers(), sipmsg()) -> sipmsg().
-set_headers(H, #sipmsg{} = M) ->
-    M#sipmsg{headers = H}.
-
-%%%
-%%% Parsing infrastructure
-%%%
--spec create_from_raw(ersip_msg:message()) -> maybe_sipmsg().
-create_from_raw(RawMsg) ->
-    MaybeMethod = method_from_raw(RawMsg),
-    MaybeRURI   = ruri_from_raw(RawMsg),
-    case fold_maybes([MaybeMethod, MaybeRURI]) of
-        [Method, RURI] ->
-            {ok,
-             #sipmsg{method = Method,
-                     ruri   = RURI,
-                     raw    = RawMsg
-                    }
-            };
-        {error, _} = Error ->
-            Error
-    end.
-
--type maybe_sipmsg() :: {ok, sipmsg()}
-                      | {error, term()}.
-
--spec maybe_parse_header(known_header(), maybe_sipmsg()) -> maybe_sipmsg().
-maybe_parse_header(_, {error, _} = Err) ->
-    Err;
-maybe_parse_header(Hdr, {ok, Msg}) ->
-    parse_header(Hdr, Msg).
-
--spec parse_header(known_header(), sipmsg()) ->  maybe_sipmsg().
-parse_header(HdrAtom, Msg) when is_atom(HdrAtom) ->
-    case ersip_siphdr:parse_header(HdrAtom, Msg) of
-        {ok, no_header} ->
-            {ok, Msg};
-        {ok, Value} ->
-            Headers = headers(Msg),
-            NewHeaders = Headers#{HdrAtom => Value},
-            {ok, set_headers(NewHeaders, Msg)};
-        {error, Reason} ->
-            {error, {header_error, {HdrAtom, Reason}}}
-    end.
-
--spec method_from_raw(ersip_msg:message()) -> MaybeMethod when
-      MaybeMethod :: {ok, ersip_method:method()}
-                   | {error, {invalid_cseq, term()}}.
-method_from_raw(RawMsg) ->
-    case ersip_msg:get(type, RawMsg) of
-        request ->
-            {ok, ersip_msg:get(method, RawMsg)};
-        response ->
-            CSeqHdr = ersip_msg:get(<<"cseq">>, RawMsg),
-            case ersip_hdr_cseq:parse(CSeqHdr) of
-                {ok, CSeq} ->
-                    {ok, ersip_hdr_cseq:method(CSeq)};
-                {error, Reason} ->
-                    {error, {invalid_cseq, Reason}}
-            end
-    end.
-
--spec ruri_from_raw(ersip_msg:message()) -> MaybeRURI when
-      MaybeRURI :: {ok, ersip_uri:uri() | undefined}
-                 | {error, {invalid_ruri, term()}}.
-ruri_from_raw(Msg) ->
-    case ersip_msg:get(type, Msg) of
-        request ->
-            URIBin = iolist_to_binary(ersip_msg:get(ruri, Msg)),
-            case ersip_uri:parse(URIBin) of
-                {ok, _} = R ->
-                    R;
-                {error, Reason} ->
-                    {error, {invalid_ruri, Reason}}
-            end;
-        response ->
-            {ok, undefined}
-    end.
-
-fold_maybes(MaybesList) ->
-    lists:foldr(fun(_, {error, _} = Error) ->
-                        Error;
-                   ({ok, Result}, Acc) ->
-                        [Result | Acc];
-                   ({error, _} = Error, _) ->
-                        Error
-                end,
-                [],
-                MaybesList).
-
-%% 8.2.6 Generating the Response
-%%
-%% Note valid parameters:
-%% 1. SipMsg has to_tag
-%% 2. Reply contains to_tag
-%% 3. Reply is 100 Trying
-%%
-%% Otherwise function generates error.
--spec reply_impl(ersip_reply:options(), sipmsg()) -> sipmsg().
-reply_impl(Reply, SipMsg) ->
-    Status = ersip_reply:status(Reply),
-    Method = method(SipMsg),
-    RSipMsg0 = new_reply(Status, ersip_reply:reason(Reply), Method),
-    %% 8.2.6.1 Sending a Provisional Response
-    %% When a 100 (Trying) response is generated, any
-    %% Timestamp header field present in the request MUST be
-    %% copied into this 100 (Trying) response.
-    RSipMsg1 = maybe_copy_timestamp(Status, SipMsg, RSipMsg0),
-
-    %% 8.2.6.2 Headers and Tags
-    %%
-    %% The From field of the response MUST equal the From header field
-    %% of the request.  The Call-ID header field of the response MUST
-    %% equal the Call-ID header field of the request.  The CSeq header
-    %% field of the response MUST equal the CSeq field of the request.
-    %% The Via header field values in the response MUST equal the Via
-    %% header field values in the request and MUST maintain the same
-    %% ordering
-    RSipMsg2 = ersip_siphdr:copy_headers(
-                 [from, callid, cseq, <<"via">>],
-                 SipMsg, RSipMsg1),
-
-    RSipMsg3 =
-        case ersip_hdr_fromto:tag(get(to, SipMsg)) of
-            {tag, _} ->
-                %% If a request contained a To tag in the request, the
-                %% To header field in the response MUST equal that of
-                %% the request.
-                ersip_siphdr:copy_header(to, SipMsg, RSipMsg2);
-            undefined ->
-                maybe_set_to_tag(Reply, SipMsg, RSipMsg2)
-        end,
-    RSipMsg3.
-
-%% When a 100 (Trying) response is generated, any
-%% Timestamp header field present in the request MUST be
-%% copied into this 100 (Trying) response.
-%%
-%% TODO: If there is a delay in generating the response, the UAS
-%% SHOULD add a delay value into the Timestamp value in the response.
-%% This value MUST contain the difference between the time of sending
-%% of the response and receipt of the request, measured in seconds.
--spec maybe_copy_timestamp(ersip_status:code(), sipmsg(), sipmsg()) -> sipmsg().
-maybe_copy_timestamp(100, SipMsg, RSipMsg) ->
-    ersip_siphdr:copy_header(<<"timestamp">>, SipMsg, RSipMsg);
-maybe_copy_timestamp(_, _, RSipMsg) ->
-    RSipMsg.
-
-%% 8.2.6.2 Headers and Tags
-%%
-%% However, if the To header field in the request did not contain a
-%% tag, the URI in the To header field in the response MUST equal the
-%% URI in the To header field; additionally, the UAS MUST add a tag to
-%% the To header field in the response (with the exception of the 100
-%% (Trying) response, in which a tag MAY be present).
--spec maybe_set_to_tag(ersip_reply:options(), SrcSipMsg, DstSipMsg) -> ResultSipMsg when
-      SrcSipMsg :: sipmsg(),
-      DstSipMsg :: sipmsg(),
-      ResultSipMsg :: sipmsg().
-maybe_set_to_tag(Reply, SipMsg, RSipMsg) ->
-    case ersip_reply:status(Reply) of
-        100 ->
-            ersip_siphdr:copy_header(to, SipMsg, RSipMsg);
-        _ ->
-            ToTag =
-                case ersip_reply:to_tag(Reply) of
-                    auto ->
-                        {tag, ersip_id:token(crypto:strong_rand_bytes(8))};
-                    {tag, _} = Tag ->
-                        Tag
-                end,
-            To = ersip_sipmsg:get(to, SipMsg),
-            NewTo = ersip_hdr_fromto:set_tag(ToTag, To),
-            set(to, NewTo, RSipMsg)
-    end.
-
--spec parse_validate_cseq(sipmsg()) -> boolean().
-parse_validate_cseq(#sipmsg{headers = #{cseq := CSeq}} = SipMsg) ->
-    ReqMethod  = ersip_sipmsg:method(SipMsg),
-    CSeqMethod = ersip_hdr_cseq:method(CSeq),
-    %% TODO maybe we may pass this check for unknown method:
-    %% ReqMethod == CSeqMethod orelse not ersip_method:is_known(ReqMethod);
-    ReqMethod == CSeqMethod;
-parse_validate_cseq(#sipmsg{}) ->
-    true.
-'''
+            for header in headers_to_parse:
+                header_key = KNOWN_HEADER_KEY_MAP[header.lower()]
+                SipMessage.maybe_parse_header(header_key, maybe_msg)
+            SipMessage.parse_validate_cseq(maybe_msg)
+            return maybe_msg
+        else:
+            raise SipMessageError(f'Cannot parse message {message}: wrong type {type(message)}')
+
+    @staticmethod
+    def parse_validate_cseq(message):
+        """
+        Args:
+            message (SipMessage)
+
+        Returns:
+            True if no cseq is defined,
+            True if SIP message method equals to method defined in CSeq header,
+            False otherwise.
+        """
+        cseq = message.headers.get(make_key('cseq'))
+        if cseq:
+            return message.method == cseq.method
+        return True
+
+    @staticmethod
+    def maybe_parse_header(header, message):
+        """Sets SipMessage header if it can be parsed and does nothing otherwise.
+
+        Args:
+            header (str or HeaderKey): header name.
+            message (SipMessage): SIP message to be changed.
+        """
+        hdr = SipHeader.parse_header(header, message)
+        if isinstance(hdr, NoHeader):
+            # do nothing, message is not changed
+            pass
+        else:
+            message.headers[header] = hdr
+
+    @staticmethod
+    def create_from_raw(raw_message):
+        """Initializes SipMessage object using parameters of raw message: sets raw_message, method and ruri fields of
+        SipMessage object.
+
+        Args:
+            raw_message (Message)
+
+        Returns:
+            :obj:SipMessage
+        """
+        sip_msg = SipMessage()
+        sip_msg.raw_message = raw_message
+        sip_msg.method = SipMessage.method_from_raw(raw_message)
+        sip_msg.ruri = SipMessage.ruri_from_raw(raw_message)
+        return sip_msg
+
+    @staticmethod
+    def method_from_raw(raw_message):
+        """Returns method of raw message if it has type request and method defined in CSeq header if raw message has
+        type response.
+
+        Args:
+            raw_message (Message)
+
+        Returns:
+            :obj:Method
+        """
+        if raw_message.type == TYPE_REQUEST:
+            return raw_message.method
+        elif raw_message.type == TYPE_RESPONSE:
+            cseq_hdr = raw_message.get(CSEQ_HEADER)
+            cseq = CSeqHeader.parse(cseq_hdr)
+            return cseq.method
+
+    @staticmethod
+    def ruri_from_raw(raw_message):
+        """Returns None if raw message has type response and Uri object if raw message has type request.
+
+        Args:
+            raw_message (Message)
+
+        Returns:
+            :obj:Uri or None
+        """
+        if raw_message.type == TYPE_RESPONSE:
+            return None
+        elif raw_message.type == TYPE_REQUEST:
+            return Uri(raw_message.ruri)
+
+    def add(self, headername, value):
+        """Adds value to header.
+
+        Args:
+            headername (str or HeaderKey): header name.
+            value (str): header value.
+        """
+        if not make_key(headername) in self.headers:
+            self.headers[make_key(headername)] = Header(headername)
+        if not isinstance(value, str):
+            raise SipMessageError(f'Cannot add header {headername}={value} to message {self.serialize()}: value should be '
+                                  f'string not ({type(value)}).')
+        self.headers[make_key(headername)].add_value(value.lstrip())
+
+    def reply(self, reply_opts):
+        """Returns SipMessage response with parameters defined by self and reply_opts.
+
+        Args:
+            reply_opts (ReplyOptions): parameters of SIP response.
+
+        Returns:
+            :obj:SipMessage
+        """
+        if isinstance(reply_opts, int):
+            reply_opts = ReplyOptions(reply_opts)
+        return self._reply_implementation(reply_opts)
+
+    @staticmethod
+    def new_reply(status, method, reason=None):
+        """Initializes empty response SIP message
+
+        Args:
+            status (int)
+            method (Method)
+            reason (str)
+
+        Returns:
+            :obj:SipMessage response with parametrized status, method and reason.
+        """
+        msg = Message()
+        msg.type = ResponseType(status=status, reason=reason)
+        sip_msg = SipMessage()
+        sip_msg.raw_message = msg
+        sip_msg.method = method
+        sip_msg.ruri = None
+        return sip_msg
+
+    # When a 100 (Trying) response is generated, any
+    # Timestamp header field present in the request MUST be
+    # copied into this 100 (Trying) response.
+    #
+    # TODO: If there is a delay in generating the response, the UAS
+    # SHOULD add a delay value into the Timestamp value in the response.
+    # This value MUST contain the difference between the time of sending
+    # of the response and receipt of the request, measured in seconds.
+    def maybe_copy_timestamp(self, status, reply_message):
+        if status == 100:
+            SipHeader.copy_header('timestamp', self, reply_message)
+
+    # 8.2.6.2 Headers and Tags
+    #
+    # However, if the To header field in the request did not contain a
+    # tag, the URI in the To header field in the response MUST equal the
+    # URI in the To header field; additionally, the UAS MUST add a tag to
+    # the To header field in the response (with the exception of the 100
+    # (Trying) response, in which a tag MAY be present).
+    def maybe_set_to_tag(self, reply_options, reply_message):
+        """Sets tag field of To header in reply_message to:
+        - to_tag defined in reply options
+        - random token if to tag is not defined in reply options
+
+        Args:
+            reply_options (ReplyOptions): reply options object
+            reply_message (SipMessage): sip message that will have to.tag field set
+        """
+        if reply_options.status == 100:
+            SipHeader.copy_header(TO_HEADER, self, reply_message)
+        else:
+            if reply_options.to_tag == AUTO:
+                tag = generate_token(8)
+            else:
+                tag = reply_options.to_tag
+            to = self.get(TO_HEADER)
+            to.tag = tag
+            reply_message.set(TO_HEADER, to)
+
+    # 8.2.6 Generating the Response
+    #
+    # Note valid parameters:
+    # 1. SipMsg has to_tag
+    # 2. Reply contains to_tag
+    # 3. Reply is 100 Trying
+    #
+    # Otherwise function generates error.
+    def _reply_implementation(self, reply):
+        """Inner implementation of reply method.
+
+        Args:
+            reply (ReplyOptions):
+
+        Returns:
+            :obj:SipMessage
+        """
+        status = reply.status
+        method = self.method
+        reply_msg = SipMessage.new_reply(status, method=method)
+        # 8.2.6.1 Sending a Provisional Response
+        # When a 100 (Trying) response is generated, any
+        # Timestamp header field present in the request MUST be
+        # copied into this 100 (Trying) response.
+        self.maybe_copy_timestamp(status, reply_msg)
+        # 8.2.6.2 Headers and Tags
+        #
+        # The From field of the response MUST equal the From header field
+        # of the request.  The Call-ID header field of the response MUST
+        # equal the Call-ID header field of the request.  The CSeq header
+        # field of the response MUST equal the CSeq field of the request.
+        # The Via header field values in the response MUST equal the Via
+        # header field values in the request and MUST maintain the same
+        # ordering
+        for header_name in [FROM_HEADER, CALLID_HEADER, CSEQ_HEADER, VIA_HEADER]:
+            SipHeader.copy_header(header_name, self, reply_msg)
+        to_header = self.get(TO_HEADER)
+        # If a request contained a To tag in the request, the
+        # To header field in the response MUST equal that of
+        # the request.
+        if to_header.tag is not None:
+            SipHeader.copy_header(TO_HEADER, self, reply_msg)
+        else:
+            self.maybe_set_to_tag(reply, reply_msg)
+        return reply_msg
+
+
+class TransportParserError(PySIPException):
+    pass
+
+
+class Data(object):
+    def __init__(self, options=None, buf=None, state=STATE_FIRST_LINE, message=None, acc=None, content_length=None,
+                 start_pos=0):
+        if options is None:
+            self.options = dict()
+        else:
+            self.options = options
+        self.buffer = buf
+        self.state = state
+        if message is None:
+            self.message = Message()
+        else:
+            self.message = message
+        if acc is None:
+            self.acc = list()
+        else:
+            self.acc = acc
+        self.content_length = content_length
+        self.start_pos = start_pos
+
+    def __repr__(self):
+        return f'Data(options={self.options}, buffer={self.buffer}, state={self.state}, message={self.message}, acc={self.acc}, content_length={self.content_length})'
+
+    def add(self, string):
+        self.buffer.add(string)
+
+
+class Parser(object):
+    STATUS_LINE_RX = re.compile(r'SIP/2\.0 (\d{3}) (.+?)$')
+
+    def new(self, options=None):
+        if options is None:
+            options = dict()
+        if isinstance(options, dict):
+            return Data(options=DEFAULT_OPTIONS.update(options), buf=(options))
+        raise TransportParserError(f'Cannot initialize datagram with options {options}: options should be dict not '
+                                   f'{type(options)}')
+
+    @staticmethod
+    def new_dgram(dgram_str):
+        return Data(buf=new_dgram(dgram_str), options={'max_message_len': MAX_MESSAGE_LENGTH_UNLIMITED})
+
+    @staticmethod
+    def parse(data):
+        if data.state == STATE_FIRST_LINE:
+            return Parser.parse_first_line(data)
+        elif data.state == STATE_HEADERS:
+            return Parser.parse_headers(data)
+        elif data.state == STATE_BODY:
+            message = Parser.parse_body(data)
+            return message
+
+    @staticmethod
+    def parse_first_line(data):
+        line = data.buffer.read_till_crlf()
+        if isinstance(line, MoreDataRequired):
+            return Parser.more_data_required(data)
+        elif isinstance(line, str):
+            return Parser.parse_first_line_string(line, data)
+
+    @staticmethod
+    def parse_first_line_string(first_line, data):
+        if first_line.startswith('SIP/'):
+            return Parser.parse_status_line(first_line, data)
+        else:
+            return Parser.parse_request_line(first_line, data)
+
+    @staticmethod
+    def parse_status_line(first_line, data):
+        match_res = Parser.STATUS_LINE_RX.match(first_line)
+        if match_res is not None:
+            status_code, reason_phrase = int(match_res.group(1)), match_res.group(2)
+            if 100 <= status_code <= 699:
+                data.message.type = ResponseType()
+                data.message.status = status_code
+                data.message.reason = reason_phrase
+                data.state = STATE_HEADERS
+                return Parser.parse(data)
+            else:
+                raise TransportParserError(f'Bad status code {status_code} in status line "{first_line}"')
+        else:
+            raise TransportParserError(f'Bad status line {first_line}')
+
+    @staticmethod
+    def parse_request_line(first_line, data):
+        try:
+            method_str, ruri, sip_2_str = first_line.split(' ')
+            if sip_2_str != 'SIP/2.0':
+                raise TransportParserError(f'Bad request line "{first_line}": invalid SIP version')
+        except Exception as e:
+            raise TransportParserError(f'Bad request line "{first_line}": {e}')
+        try:
+            method = Method(method_str)
+        except MethodError as e:
+            raise TransportParserError(f'Bad request line "{first_line}": {e}')
+        data.message.type = RequestType()
+        data.message.method = method
+        data.message.ruri = ruri
+        data.state = STATE_HEADERS
+        return Parser.parse(data)
+
+    @staticmethod
+    def parse_headers(data):
+        if not data.acc:
+            line = data.buffer.read_till_crlf()
+            if line == '':
+                raise TransportParserError(f'Cannot parse message {data}: no headers')
+            if isinstance(line, MoreDataRequired):
+                return Parser.more_data_required(data)
+            data.acc.append(line)
+            return Parser.parse_headers(data)
+        else:
+            line = data.buffer.read_till_crlf()
+            if isinstance(line, MoreDataRequired):
+                return MoreDataRequired(data)
+            if line.startswith(' ') or line.startswith('\t'):
+                data.acc.append(line)
+                return Parser.parse_headers(data)
+            if line == '':
+                Parser.add_header(data.acc, data)
+                data.acc = list()
+                data.state = STATE_BODY
+                return Parser.parse(data)
+            else:
+                Parser.add_header(data.acc, data)
+                data.acc = list()
+                data.acc.append(line)
+                return Parser.parse_headers(data)
+
+    @staticmethod
+    def parse_body(data):
+        if data.content_length is None:
+            try:
+                content_length = int(data.message.get('content-length').values[0])
+                if content_length >= 0:
+                    data.content_length = content_length
+                    return Parser.parse_body(data)
+            except IndexError:
+                if data.buffer.has_eof():
+                    data.content_length = data.buffer.length
+                    return Parser.parse_body(data)
+        else:
+            content = data.buffer.read(data.content_length)
+            if isinstance(content, MoreDataRequired):
+                if data.buffer.has_eof():
+                    raise TransportParserError(f'Truncated message')
+                else:
+                    return Parser.more_data_required(data)
+            else:
+                stream_position = data.buffer.pos
+                message_length = stream_position - data.start_pos
+                data.message.body = content
+                data.content_length = None
+                data.state = STATE_FIRST_LINE
+                data.start_pos = stream_position
+                return Parser.message_parsed(data, message_length)
+
+    @staticmethod
+    def more_data_required(data):
+        if data.options['max_message_len'] == MAX_MESSAGE_LENGTH_UNLIMITED:
+            return MoreDataRequired(data), data
+        buf_pos = data.buffer.pos
+        already_read = buf_pos - data.start_pos
+        accumulated = data.buffer.acc_length + data.buffer.queue_length
+        if already_read + accumulated > data.options['max_message_len']:
+            raise TransportParserError(f'Message too long')
+        return MoreDataRequired(data), data
+
+    @staticmethod
+    def message_parsed(data, length):
+        if isinstance(data.options['max_message_len'], int) and length > data.options['max_message_len']:
+            raise TransportParserError(f'Message too long')
+        return data.message, data
+
+    @staticmethod
+    def add_header(header, data):
+        if isinstance(header, list):
+            header_string = header[0]
+            if len(header) > 1:
+                rest = ''.join(header[1:])
+            else:
+                rest = ''
+        else:
+            header_string = header
+            rest = ''
+        header_name, header_value = header_string.split(':', 1)
+        data.message.add(header_name.strip(), header_value + rest)
+
+
+class NoHeader(object):
+    pass
+
+
+class DescriptionError(PySIPException):
+    pass
+
+
+class Description(object):
+    def __init__(self, required=None, header_class=None):
+        if not issubclass(header_class, BaseSipHeader):
+            raise Description(f'Cannot initialize Description({required}, {header_class}): header_class should be a '
+                              f'subclass of BaseSipHeader')
+        self.required = required
+        self.header_class = header_class
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}: required {self.required}, header_class: {self.header_class.__name__}'
+
+    def parse_header(self, header):
+        return self.header_class.parse(header)
+
+
+class SipHeaderError(PySIPException):
+    pass
+
+
+class RequiredEssentials(object):
+    def __init__(self, sip_message):
+        self.type = sip_message.type
+        self.method = sip_message.method
+        self.status = sip_message.status
+        self.has_body = sip_message.has_body
+
+
+class SipHeader(object):
+    @staticmethod
+    def copy_header(header, src_msg, dst_msg):
+        """
+
+        Args:
+            header: header name to be copied
+            src_msg (SipMessage): SipMessage to be copied from
+            dst_msg (SipMessage): message to be copied to
+
+        Returns:
+
+        """
+        if make_key(header) in src_msg.headers:
+            dst_msg.headers[make_key(header)] = src_msg.headers[make_key(header)]
+            SipHeader.copy_raw_header(make_key(header), src_msg, dst_msg)
+        if make_key(header) not in ALL_KNOWN_HEADERS_KEYS:
+            SipHeader.copy_raw_header(make_key(header), src_msg, dst_msg)
+
+    @staticmethod
+    def copy_raw_header(header_key, src_msg, dst_msg):
+        dst_msg.raw_message.set_header(src_msg.raw_message.get(header_key))
+
+    @staticmethod
+    def copy_headers(header_list, src_msg, dst_msg):
+        pass
+
+    @staticmethod
+    def set_header(header_name, header_value, msg):
+        descr = SipHeader.header_descr(header_name)
+        print_name = PRINT_FORM_MAP.get(make_key(header_name), header_name)
+        raw_hdr = Header(print_name)
+        raw_hdr.add_value(header_value.assemble())
+        if not raw_hdr.values:
+            msg.headers.pop(make_key(header_name), None)
+            msg.raw_message.delete_header(make_key(header_name))
+        else:
+            msg.headers[make_key(header_name)] = header_value
+            msg.raw_message.set_header(raw_hdr)
+
+    @staticmethod
+    def set_raw_header(header, msg):
+        msg.raw_message.set_header(header)
+        if header.key in ALL_KNOWN_HEADERS_KEYS:
+            try:
+                msg.headers.pop(header.key)
+                msg = SipMessage.parse(msg, [header.name])
+            except KeyError:
+                pass
+
+    @staticmethod
+    def remove_header(header, msg):
+        msg.headers.pop(make_key(header), None)
+        msg.raw_message.delete_header(header)
+
+    @staticmethod
+    def parse_header_by_descr(descr, header):
+        pass
+
+    @staticmethod
+    def parse_header(header, msg):
+        descr = SipHeader.header_descr(header)
+        hdr = SipHeader.get_header(header, descr, msg)
+        if isinstance(hdr, NoHeader):
+            return hdr
+        if isinstance(hdr, Header):
+            return descr.parse_header(hdr)
+        raise SipHeaderError(f'Cannot parse header {header}: header should be of type Header not {type(header)}')
+
+    @staticmethod
+    def get_header(header, descr, msg):
+        hdr = msg.raw_message.get(header)
+        if not hdr.values:
+            if SipHeader.is_required(msg, descr.required):
+                raise SipHeaderError(f'Cannot get required header {header}: no header.')
+            return NoHeader()
+        return hdr
+
+    @staticmethod
+    def is_required(msg, required):
+        """
+
+        Args:
+            msg (:obj:SipMessage): instance of pysip.message.sipmsg.SipMessage class.
+            required (bool): required flag taken from header's description
+
+        Returns:
+            True if header is required,
+            False otherwise.
+        """
+        if required == REQUIRED_ALL:
+            return True
+        elif required == REQUIRED_OPTIONAL:
+            return False
+        elif isinstance(msg, RequiredEssentials):
+            if msg.type == TYPE_REQUEST and required == REQUIRED_REQUESTS:
+                return True
+            elif msg.has_body() and required == REQUIRED_WITH_BODY:
+                return True
+            else:
+                return False
+        elif isinstance(msg, SipMessage):
+            return SipHeader.is_required(RequiredEssentials(msg), required)
+        else:
+            raise SipHeaderError(f'Cannot decide if {msg} is required: msg should be of type SipMessage or '
+                                 f'RequiredEssentials, not {type(msg)}')
+
+    @staticmethod
+    def header_descr(header):
+        header_key = make_key(header)
+        if header_key == make_key('from') or header_key == make_key('to'):
+            return Description(required=REQUIRED_ALL, header_class=FromToHeader)
+        elif header_key == make_key('cseq'):
+            return Description(required=REQUIRED_ALL, header_class=CSeqHeader)
+        elif header_key == make_key('callid') or header_key == make_key('call-id'):
+            return Description(required=REQUIRED_ALL, header_class=CallIDHeader)
+        elif header_key == make_key('max-forwards'):
+            return Description(required=REQUIRED_OPTIONAL, header_class=MaxForwardsHeader)
+        elif header_key == make_key('topmost_via') or header_key == make_key('via'):
+            return Description(required=REQUIRED_REQUESTS, header_class=ViaHeader)
+        elif header_key == make_key('content-type'):
+            return Description(required=REQUIRED_WITH_BODY, header_class=ContentTypeHeader)
+        elif header_key == make_key('route') or header_key == make_key('record-route'):
+            return Description(required=REQUIRED_OPTIONAL, header_class=RouteHeader)
+        elif header_key == make_key('allow'):
+            return Description(required=REQUIRED_OPTIONAL, header_class=AllowHeader)
+        elif header_key in (make_key('supported'), make_key('unsupported'), make_key('require'),
+                            make_key('proxy-require')):
+            return Description(required=REQUIRED_OPTIONAL, header_class=OptTagListHeader)
+        elif header_key == make_key('contact'):
+            return Description(required=REQUIRED_OPTIONAL, header_class=ContactHeaderList)
+        elif header_key == make_key('expires') or header_key == make_key('min-expires'):
+            return Description(required=REQUIRED_OPTIONAL, header_class=ExpiresHeader)
+        elif header_key == make_key('date'):
+            return Description(required=REQUIRED_OPTIONAL, header_class=DateHeader)
+
+

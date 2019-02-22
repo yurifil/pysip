@@ -50,6 +50,9 @@ class Message(object):
         self.body = None
         self.source = None
 
+    def __repr__(self):
+        return f'Message: type={self._type} headers={self._headers} body={self.body}'
+
     @property
     def headers(self):
         return list(self._headers.values())
@@ -79,7 +82,8 @@ class Message(object):
         elif item == ITEM_BODY:
             return self.body
         else:
-            return self._headers.get(make_key(item), Header(item))
+            hdr = self._headers.get(make_key(item), Header(item))
+            return hdr
 
     @property
     def reason(self):
@@ -129,10 +133,12 @@ class Message(object):
 
     @ruri.setter
     def ruri(self, ruri):
+        print(f'Message.ruri.setter: type: {self._type}')
+        print(f'Message.ruri.setter: type: {self.type}')
         if isinstance(self._type, RequestType):
             self._type.ruri = ruri
         else:
-            raise MessageError(f'Cannot set method {ruri} for message {self.serialize()}: message should be request, '
+            raise MessageError(f'Cannot set ruri {ruri} for message {self.serialize()}: message should be request, '
                                f'not {type(self._type)}')
 
     @property
@@ -143,6 +149,7 @@ class Message(object):
     def type(self, value):
         if isinstance(value, (RequestType, ResponseType)):
             self._type = value
+            print(f'Message.type.setter: {self._type}')
         else:
             raise MessageError(f'Cannot set type {value} for message {self.serialize()}: type should be a subclass of '
                                f'MessageType.')
@@ -178,6 +185,9 @@ class Message(object):
                 hdr.add_value(value)
             self._headers[key] = hdr
 
+    def set_header(self, header):
+        self._headers[header.key] = header
+
     def serialize_first_line(self):
         if isinstance(self._type, RequestType):
             return f'{self._type.method} {self._type.ruri} SIP/2.0'
@@ -203,5 +213,9 @@ class Message(object):
         not_ordered_keys_set = set(self._headers.keys()).difference(Message.HEADERS_KEYS_ORDER)
         ordered_headers = self.serialize_headers_in_order(Message.HEADERS_KEYS_ORDER)
         not_ordered_headers = self.serialize_headers_in_order(not_ordered_keys_set)
-        return '\r\n\r\n'.join([ordered_headers, not_ordered_headers])
+        if not_ordered_headers:
+            not_ordered_headers = '\r\n' + not_ordered_headers
+        return ordered_headers + not_ordered_headers + '\r\n\r\n'
 
+    def delete_header(self, header_name):
+        self._headers.pop(make_key(header_name), None)

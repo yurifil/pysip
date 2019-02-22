@@ -1,6 +1,6 @@
 from pysip.message.hdr_cseq import CSeqHeader, CSeqHeaderError
-from pysip.message.hdr import Header, HeaderError
-from pysip.message.method_unicode import Method, MethodError, INVITE, REGISTER
+from pysip.message.hdr import Header
+from pysip.message.method import Method, INVITE, REGISTER
 from pysip import PySIPException
 import pytest
 

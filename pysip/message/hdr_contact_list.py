@@ -16,12 +16,19 @@ class ContactHeaderList(BaseSipHeader):
         if contact_list is not None:
             self.contact_list = self.parse_contact_list(contact_list)
 
+    def __repr__(self):
+        return self.assemble()
+
+    @property
+    def values(self):
+        return self.contact_list
+
     @staticmethod
     def parse(contact_list):
         return ContactHeaderList(contact_list)
 
     def assemble(self):
-        raise NotImplementedError
+        return self.build('Contact').serialize_to_string()
 
     def build(self, header_name):
         hdr = Header(header_name)

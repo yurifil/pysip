@@ -1,4 +1,6 @@
 import array
+import random
+import string
 
 # TODO: finish this module
 
@@ -44,12 +46,17 @@ def token(binary):
     return encode(binary, CharTable)
 
 
+def generate_token(length):
+    return ''.join(random.SystemRandom().choice(string.ascii_letters + string.digits) for _ in range(length))
+
+
 def encode(binary, token_tab):
     return encode_impl(binary, token_tab, 0, [])
 
 
 def encode_impl(binary, char_table, non_neg_integer, bytes_list):
     for sym in binary:
+        print(f'id.encode_impl(): {sym}')
         print(sym, char_table.token_translate(sym), chr(char_table.token_translate(sym)))
 
 

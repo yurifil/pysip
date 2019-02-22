@@ -2,6 +2,7 @@ import pytest
 from pysip.message.message import Message, MessageError, MessageType, ResponseType, RequestType, TYPE_RESPONSE, \
     TYPE_REQUEST, ITEM_RURI, ITEM_TYPE, ITEM_METHOD, ITEM_STATUS, ITEM_REASON, ITEM_BODY
 from pysip.message.method import Method, INVITE, REGISTER, ACK
+import difflib
 
 
 @pytest.mark.parametrize('msg_type, type_name', [(ResponseType, TYPE_RESPONSE),
@@ -77,13 +78,13 @@ def test_message_serialize_request():
     msg.set('Max-Forwards', '70')
     msg.set('CSeq', '1 INVITE')
     msg.set('Call-Id', 'some-call-id')
-    exp_msg = '\r\n'.join(['INVITE sip:alice@example.com SIP/2.0',
-                           'Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bK776asdhds',
-                           'To: sip:alice@example.com',
-                           'From: sip:bob@biloxi.com',
-                           'Call-Id: some-call-id',
-                           'CSeq: 1 INVITE',
-                           'Max-Forwards: 70']) + '\r\n\r\n'
+    exp_msg = 'INVITE sip:alice@example.com SIP/2.0' + \
+              '\r\nVia: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bK776asdhds' + \
+              '\r\nTo: sip:alice@example.com' + \
+              '\r\nFrom: sip:bob@biloxi.com' + \
+              '\r\nCall-Id: some-call-id' + \
+              '\r\nCSeq: 1 INVITE' + \
+              '\r\nMax-Forwards: 70\r\n\r\n'
     assert exp_msg == msg.serialize()
 
 

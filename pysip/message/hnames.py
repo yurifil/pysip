@@ -1,5 +1,28 @@
 from collections import namedtuple
 
+
+HeaderKey = namedtuple('hdr_key', 'header')
+
+
+def compact_form(header):
+    return COMPACT_FORM_MAP.get(header.lower(), header.lower())
+
+
+def print_form(header):
+    return PRINT_FORM_MAP.get(make_key(header), header)
+
+
+def known_header_form(header):
+    return KNOWN_HEADER_KEY_MAP.get(make_key(header))
+
+
+def make_key(header):
+    if isinstance(header, HeaderKey):
+        return header
+    elif isinstance(header, (bytes, str)):
+        return HeaderKey(compact_form(header))
+
+
 FROM_HEADER = 'from'
 TO_HEADER = 'to'
 CALLID_HEADER = 'call-id'
@@ -8,8 +31,6 @@ MAXFORWARDS_HEADER = 'max-forwards'
 VIA_HEADER = 'via'
 ALLOW_HEADER = 'Allow'
 CONTACT_HEADER = 'Contact'
-
-HeaderKey = namedtuple('hdr_key', 'header')
 
 
 PRINT_FORM_MAP = {HeaderKey('f'): 'From',
@@ -74,7 +95,7 @@ KNOWN_HEADER_KEY_MAP = {'from': HeaderKey('f'),
 
 ALL_KNOWN_HEADERS = ['from',
                      'to',
-                     'callid',
+                     'call-id',
                      'cseq',
                      'maxforwards',
                      'topmost_via',
@@ -93,23 +114,8 @@ ALL_KNOWN_HEADERS = ['from',
                      ]
 
 
-def make_key(header):
-    if isinstance(header, HeaderKey):
-        return header
-    elif isinstance(header, (bytes, str)):
-        return HeaderKey(compact_form(header))
+ALL_KNOWN_HEADERS_KEYS = list([make_key(h) for h in ALL_KNOWN_HEADERS])
 
-
-def compact_form(header):
-    return COMPACT_FORM_MAP.get(header.lower(), header.lower())
-
-
-def print_form(header):
-    return PRINT_FORM_MAP.get(make_key(header), header)
-
-
-def known_header_form(header):
-    return KNOWN_HEADER_KEY_MAP.get(make_key(header))
 
 '''
 
