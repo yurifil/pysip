@@ -1,18 +1,18 @@
 from pysip import PySIPException
-from pysip.message.hdr import Header
+from pysip.message.hdr import Header, BaseSipHeader
 
 
 class ExpiresHeaderError(PySIPException):
     pass
 
 
-class ExpiresHeader(object):
+class ExpiresHeader(BaseSipHeader):
     MAX_EXPIRES = 4294967295
 
     def __init__(self, expires=None):
         self._expires = expires
         if expires is not None:
-            self._expires = ExpiresHeader.parse(expires)
+            self._expires = ExpiresHeader.parse_expires(expires)
 
     def __eq__(self, other):
         if isinstance(other, ExpiresHeader):
@@ -29,6 +29,10 @@ class ExpiresHeader(object):
 
     @staticmethod
     def parse(expires):
+        return ExpiresHeader(expires)
+
+    @staticmethod
+    def parse_expires(expires):
         if isinstance(expires, int):
             int_expires = expires
         elif isinstance(expires, str):
@@ -47,7 +51,16 @@ class ExpiresHeader(object):
 
     @staticmethod
     def parse_hdr(header):
-        return ExpiresHeader.parse(''.join(header.values))
+        return ExpiresHeader.parse_expires(''.join(header.values))
+
+    def assemble(self):
+        return f'{self._expires}'
+
+    def build(self, header_name):
+        hdr = Header(header_name)
+        hdr.add_value(self.assemble())
+        return hdr
+
 
 '''
 %%

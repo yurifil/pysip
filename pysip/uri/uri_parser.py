@@ -39,6 +39,14 @@ class SIPUriParser(object):
         return to_integer(val)
 
     def _is_valid_user(self, user):
+        """
+        Args:
+            user: user string.
+
+        Returns:
+            True if user is rfc compliant,
+            False otherwise.
+        """
         symbols = iter(user)
         if not user:
             return False
@@ -60,13 +68,19 @@ class SIPUriParser(object):
         return True
 
     def _is_valid_passwd(self, passwd):
+        """
+        Args:
+            passwd: password string.
+
+        Returns:
+            True if password is rfc compliant,
+            False otherwise.
+        """
         symbols = iter(passwd)
         for int_sym in symbols:
             sym = self._normalize(int_sym)
             # TODO: this ought to be really slow. Fix this.
             if self.from_inner(sym).isalnum() or sym in self.MARK or sym in self.PASSWD_UNRESERVED:
-                print(f'Sym {sym} isalnum: {self.from_inner(sym).isalnum()}')
-                print('Continuing')
                 continue
             elif sym == self.PERCENT_SIGN:
                 try:
@@ -81,26 +95,53 @@ class SIPUriParser(object):
         return True
 
     def _check_userinfo(self, userinfo):
+        """
+        Args:
+            userinfo: <user>:<password> userinfo string.
+
+        Returns:
+            True if userinfo is rfc compliant,
+            False otherwise.
+        """
         splitted = userinfo.split(self.COLON)
-        print(f'Splitted userinfo: {splitted}')
         is_valid = self._is_valid_user(splitted[0])
-        print(f'Is valid user: {is_valid}')
         if len(splitted) > 1:
             is_valid = is_valid and self._is_valid_passwd(splitted[1])
         return is_valid
 
     def validate_user(self, user):
+        """Validates userinfo string.
+
+        Args:
+            user: userinfo string
+
+        Returns:
+            userinfo string
+
+        Raises:
+            UserParseError if userinfo is not rfc compliant.
+
+        """
         if not self._check_userinfo(user):
             raise UserParseError(f'Invalid userinfo: {user}')
         return user
 
     def parse_user(self, authority):
-        print(f'Authority: {authority}')
+        """Parses userinfo out of authority string.
+
+        Args:
+            authority: userinfo and present string.
+
+        Returns:
+            Valid userinfo string.
+
+        Raises:
+            UserParseError if userinfo is empty but authority string contains "@".
+        """
         if authority is None:
             return None
         else:
             userinfo, present, _ = authority.rpartition(self.AT)
-            print(f'Userinfo: {userinfo}. Present: {present}. Rest: {_}')
             if not userinfo:
                 if present:
                     raise UserParseError(f'Invalid (empty) userinfo in authority {authority}')
@@ -109,31 +150,56 @@ class SIPUriParser(object):
 
     @staticmethod
     def is_valid_port(port):
+        """
+        Args:
+            port (int): port value.
+
+        Returns:
+            True if port is an integer in 0..65535 range,
+            False otherwise
+        """
         if 0 < port <= 65535:
             return True
         return False
 
     def validate_port(self, port):
+        """Validates port value.
+
+        Args:
+            port (int||str): port value.
+
+        Returns:
+            int: Valid port value.
+
+        Raises:
+            PortParseError if port value is not valid.
+
+        """
         if not isinstance(port, int):
             decoded_port = self._decode_int(port)
         else:
             decoded_port = port
         if not self.is_valid_port(decoded_port):
-            raise PortParseError(f'Cannot parse port {port}')
+            raise PortParseError(f'Cannot parse port {port}: invalid value.')
         else:
             return decoded_port
 
     def parse_port(self, authority):
-        # print(f'port.Authority: {authority}')
+        """Parses port value out of authority string.
+
+        Args:
+            authority (str)
+
+        Returns:
+            int: Valid port value,
+            None: if no port can be found in authority string.
+        """
         if authority is None:
             return None
         _, present, port = authority.rpartition(self.COLON)
-        # print(f'_: {_}, present: {present}, port: {port}')
-        if present and not port.lstrip(self.DIGITS):
-            # print(f'Port: {port}')
+        if present and not port.strip().lstrip(self.DIGITS):
             return self.validate_port(port)
         else:
-            # print(f'Port not found')
             return None
 
     # TODO: do this without recursion!
@@ -141,6 +207,8 @@ class SIPUriParser(object):
         if len(bytes_list) == 0:
             return False
         if len(bytes_list) == 1 and self.from_inner(self._normalize(bytes_list[0])).isalnum():
+            return True
+        if len(bytes_list) == 2 and self._normalize(bytes_list[0]) == self.DOT and self.from_inner(self._normalize(bytes_list[1])).isalnum():
             return True
         if self._normalize(bytes_list[0]) == self.DOT and self.from_inner(self._normalize(bytes_list[1])).isalnum():
             return self.domainlabel_valid(bytes_list[2:])
@@ -167,7 +235,14 @@ class SIPUriParser(object):
         return False
 
     def _check_host(self, host):
-        print(f'Checking host {host}')
+        """
+        Args:
+            host (str): host string.
+
+        Returns:
+            True if host is rfc compliant,
+            False otherwise
+        """
         reversed_symbols = list(reversed(list(iter(host))))
         int_sym = reversed_symbols[0]
         sym = self._normalize(int_sym)
@@ -182,13 +257,22 @@ class SIPUriParser(object):
         return True
 
     def validate_host(self, host):
-        print(f'Host: {host}')
+        """
+        Args:
+            host:
+
+        Returns:
+            str: if host is a valid url,
+            obj:ipaddress.IPv4Address: if host is valid IPv4 address,
+            obj:ipaddress.IPv6Address: if host is valid IPv6 address.
+
+        Raises:
+            HostParseError: if host is neither a valid url, valid IPv4 address or valid IPv6 address.
+        """
         if host.startswith(self.LBRACKET) and host.endswith(self.RBRACKET):
-            print(f'IP literal: {_ip_literal(host[1:-1])}')
             return _ip_literal(host[1:-1])
         elif host.startswith(self.LBRACKET) or host.endswith(self.RBRACKET):
-            raise ValueError(f'Invalid host {host}')
-        print(f"IPv4: {_ipv4_address(host)} uridecode: {uridecode(host, 'utf-8', 'strict').lower()}")
+            raise HostParseError(f'Invalid host {host}')
         ret_host = _ipv4_address(host)
         if not ret_host:
             if self._check_host(host):
@@ -198,11 +282,21 @@ class SIPUriParser(object):
         return ret_host
 
     def parse_host(self, authority):
+        """Parses valid host value from authority string.
+
+        Args:
+            authority (str)
+
+        Returns:
+            str: if host is a valid url,
+            obj:ipaddress.IPv4Address: if host is valid IPv4 address,
+            obj:ipaddress.IPv6Address: if host is valid IPv6 address.
+        """
         if authority is None:
             return None
         _, _, hostinfo = authority.rpartition(self.AT)
         host, _, port = hostinfo.rpartition(self.COLON)
-        if port.lstrip(self.DIGITS):
+        if port.strip().lstrip(self.DIGITS):
             return self.validate_host(hostinfo)
         else:
             return self.validate_host(host)
@@ -214,6 +308,17 @@ class SIPUriParser(object):
         return True
 
     def validate_scheme(self, scheme):
+        """Validates sip uri scheme.
+
+        Args:
+            scheme (str)
+
+        Returns:
+            str: valid scheme value.
+
+        Raises:
+            URIParseError: if scheme is no rfc compliant.
+        """
         if not self._is_valid_scheme(scheme):
             raise URIParseError('Invalid scheme')
         return scheme
@@ -227,7 +332,6 @@ class SIPUriParser(object):
         params = None
         headers = None
         (scheme, authority, path, query, fragment) = self.RX.match(uri_str).groups()
-        print(f'scheme: {scheme}, authority: {authority}, path: {path}, query: {query}, fragment: {fragment}')
         if self.SEMICOLON in authority:
             hostport, present, rest = authority.partition(self.SEMICOLON)
             params = rest
@@ -235,7 +339,6 @@ class SIPUriParser(object):
             hostport = authority
         if query:
             headers = query
-        print(f'scheme: {scheme}, hostport: {hostport}, params: {params}, headers: {headers}')
         return scheme, hostport, params, headers
 
     def _validate_transport(self, transport):
@@ -284,6 +387,14 @@ class SIPUriParser(object):
             raise ParamParseError(f'Cannot parse {param}={value}: {e}')
 
     def parse_params(self, params_str):
+        """Parses parameters out of parameters string.
+
+        Args:
+            params_str (str)
+
+        Returns:
+            dict: if parameters string is rfc compliant.
+        """
         if not params_str:
             return None
         params = dict()
@@ -296,7 +407,6 @@ class SIPUriParser(object):
                 value = None
             param, value = self._validate_param(param, value)
             params[param] = value
-        print(f'Parsed params: {params}')
         return params
 
     def _validate_header(self, header, value):
@@ -315,7 +425,6 @@ class SIPUriParser(object):
                 value = None
             header, value = self._validate_header(header, value)
             headers[header] = value
-        print(f'Parsed headers: {headers}')
         return headers
 
     def parse(self, uri_str):

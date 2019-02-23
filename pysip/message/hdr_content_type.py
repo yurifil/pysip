@@ -1,5 +1,5 @@
 from pysip import PySIPException
-from pysip.message.hdr import Header
+from pysip.message.hdr import Header, BaseSipHeader
 from pysip.message.parser_aux import parse_token, parse_slash, parse_params
 
 
@@ -19,12 +19,12 @@ class ContentTypeHeaderError(PySIPException):
     pass
 
 
-class ContentTypeHeader(object):
+class ContentTypeHeader(BaseSipHeader):
     def __init__(self, header=None):
         self.mime_type = None
         self.params = None
         if header is not None:
-            self.mime_type, self.params = ContentTypeHeader.parse(header)
+            self.mime_type, self.params = ContentTypeHeader.parse_content_type(header)
 
     def __eq__(self, other):
         if isinstance(other, ContentTypeHeader):
@@ -33,6 +33,10 @@ class ContentTypeHeader(object):
 
     @staticmethod
     def parse(header):
+        return ContentTypeHeader(header)
+
+    @staticmethod
+    def parse_content_type(header):
         if isinstance(header, str):
             return ContentTypeHeader.parse_content_type_string(header)
         elif isinstance(header, Header):

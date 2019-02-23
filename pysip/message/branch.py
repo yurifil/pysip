@@ -3,8 +3,8 @@ from pysip.message.pysip_id import token
 from pysip.binary import to_lower
 import re
 
-rfc3261_branch_rx = re.compile(b'z9hG4bK.*')
-rfc3261_branch_key_rx = re.compile(b'z9hg4bk.*')
+rfc3261_branch_rx = re.compile('z9hG4bK.*')
+rfc3261_branch_key_rx = re.compile('z9hg4bk.*')
 
 
 class BranchError(ValueError):
@@ -16,6 +16,38 @@ class BranchKeyError(ValueError):
 
 
 class Branch(object):
+    def __init__(self, string):
+        if not isinstance(string, str):
+            raise BranchError
+        self.binary = string
+
+    def __eq__(self, other):
+        if isinstance(other, (Branch, BranchKey)):
+            return BranchKey(self) == BranchKey(other)
+        return NotImplemented
+
+    def assemble(self):
+        return self.binary
+
+    def make_key(self):
+        return BranchKey(self)
+
+
+class BranchKey(object):
+    ENCODING = 'utf-8'
+
+    def __init__(self, branch):
+        if not isinstance(branch, (Branch, BranchKey)):
+            raise BranchKeyError
+        self.binary = branch.binary.lower()
+
+    def __eq__(self, other):
+        if isinstance(other, BranchKey):
+            return self.binary == other.binary
+        return NotImplemented
+
+
+class BranchBytes(object):
     def __init__(self, binary):
         if not isinstance(binary, bytes):
             raise BranchError
@@ -27,7 +59,7 @@ class Branch(object):
         return NotImplemented
 
 
-class BranchKey(object):
+class BranchKeyBytes(object):
     ENCODING = 'utf-8'
 
     def __init__(self, branch):
@@ -45,7 +77,7 @@ def make_rfc3261(binary):
     if is_rfc3261(Branch(binary)):
         return Branch(binary)
     else:
-        return Branch(b'z9hG4bK' + binary)
+        return Branch('z9hG4bK' + binary)
 
 
 def is_rfc3261(branch):

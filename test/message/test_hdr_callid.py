@@ -9,17 +9,17 @@ def make_alphanum_string():
     return string.ascii_lowercase + string.ascii_uppercase + string.digits
 
 
-@pytest.mark.parametrize('value', [b'a@b',
+@pytest.mark.parametrize('value', ['a@b',
                                    to_bytes(WORD_CHARS + make_alphanum_string() + '@' + make_alphanum_string() +
                                             WORD_CHARS),
                                    to_bytes(WORD_CHARS + make_alphanum_string())])
 def test_parse_header_success(value):
-    h = Header(b'Call-ID')
+    h = Header('Call-ID')
     h.add_value(value)
-    assert h == CallIDHeader(value)
+    assert h == CallIDHeader(value).build('Call-ID')
 
 
-@pytest.mark.parametrize('value', [b',', None, '', b'a@@b', b'a@b, c@d'])
+@pytest.mark.parametrize('value', [',', None, '', 'a@@b', 'a@b, c@d'])
 def test_parse_header_fail(value):
     with pytest.raises(CallIDError):
         CallIDHeader(value)

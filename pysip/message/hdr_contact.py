@@ -100,8 +100,6 @@ class ContactHeader(object):
 
     def __eq__(self, other):
         if isinstance(other, ContactHeader):
-            print(f'self.display_name {self.display_name} == other.display_name {other.display_name} and self.uri '
-                  f'{self.uri} == other.uri {other.uri} and self.params {self.params} == other.params {other.params}')
             return self.display_name == other.display_name and self.uri == other.uri and self.params == other.params
         return NotImplemented
 
@@ -125,6 +123,9 @@ class ContactHeader(object):
 
     def get_param(self, name):
         return self.params.find_raw(name)
+
+    def __repr__(self):
+        return self.assemble()
 
 
 '''

@@ -7,6 +7,8 @@ import re
 QUOTED_STRING_RX = re.compile(r'"(.+)"')
 SPLIT_PATTERN_RX = re.compile(r'\s+')
 
+INTEGER_RX = re.compile(r'^(\d+)(\D*)')
+
 PARSER = SIPUriParserUnicode()
 
 START_STATE = 'start'
@@ -102,6 +104,8 @@ def parse_slash(string):
     string = string.strip()
     if string.startswith('/'):
         return '/', string[1:].strip()
+    else:
+        raise ParserAUXError(f"Cannot parse slash from {string}: doesn't start with slash")
 
 
 def parse_token(string):
@@ -208,6 +212,43 @@ quoted_string(Quoted) ->
             error
     end.
 '''
+
+'''-spec parse_non_neg_int(binary()) -> parse_result(non_neg_integer(), {invalid_integer, binary()}).
+parse_non_neg_int(Bin) ->
+    parse_non_neg_int_impl(Bin, start, 0).
+    
+parse_non_neg_int_impl(<<Char/utf8, _/binary>> = Bin, start, Acc) when Char >= $0 andalso Char =< $9 ->
+    parse_non_neg_int_impl(Bin, rest, Acc);
+parse_non_neg_int_impl(Bin, start, _) ->
+    {error, {invalid_integer, Bin}};
+parse_non_neg_int_impl(<<Char/utf8, R/binary>>, rest, Acc) when Char >= $0 andalso Char =< $9 ->
+    parse_non_neg_int_impl(R, rest, Acc * 10 + Char - $0);
+parse_non_neg_int_impl(Rest, rest, Acc) ->
+    {ok, Acc, Rest}.
+    '''
+
+
+def parse_non_negative_integer(number):
+    if isinstance(number, str):
+        m = INTEGER_RX.match(number)
+        if m:
+            return int(m.group(1)), m.group(2)
+        else:
+            return None, number
+    elif isinstance(number, int):
+        if number >= 0:
+            return number
+        else:
+            raise ParserAUXError(f'Cannot parse non negative integer from {number}')
+    else:
+        try:
+            int_number = int(number)
+            if int_number >= 0:
+                return int_number
+            else:
+                raise ParserAUXError(f'Cannot parse non negative integer from {number}')
+        except Exception as e:
+            raise ParserAUXError(f'Cannot parse non negative integer from {number}: {e}')
 
 
 def parse_gen_param_value(v):
@@ -449,9 +490,7 @@ trim_lws(Bin) ->
     N = byte_size(Bin) - byte_size(Trimmed),
     {ok, {lws, N}, Trimmed}.
 
--spec parse_non_neg_int(binary()) -> parse_result(non_neg_integer(), {invalid_integer, binary()}).
-parse_non_neg_int(Bin) ->
-    parse_non_neg_int_impl(Bin, start, 0).
+
 
 %% @doc Parse key-value pairs sepeated with Sep.
 %% Validator may:

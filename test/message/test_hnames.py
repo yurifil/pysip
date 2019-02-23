@@ -1,6 +1,6 @@
 from pysip.message.hnames import compact_form, print_form
 
-IANAPageCopy = b"Accept-Contact	a	[RFC3841]\
+IANAPageCopy = "Accept-Contact	a	[RFC3841]\
           |Referred-By	b	[RFC3892]\
           |Content-Type	c	[RFC3261]\
           |Request-Disposition	d	[RFC3841]\
@@ -20,24 +20,24 @@ IANAPageCopy = b"Accept-Contact	a	[RFC3841]\
           |Session-Expires	x	[RFC4028]\
           |Identity	y	[RFC8224]"
 
-PrintForms = [b"From",
-              b"To",
-              b"CSeq",
-              b"Call-Id",
-              b"Max-Forwards",
-              b"Content-Type",
-              b"Route",
-              b"Record-Route",
-              b"Allow",
-              b"Supported",
-              b"Unsupported",
-              b"Require",
-              b"Proxy-Require",
-              b"p-custom-header"]
+PrintForms = ["From",
+              "To",
+              "CSeq",
+              "Call-Id",
+              "Max-Forwards",
+              "Content-Type",
+              "Route",
+              "Record-Route",
+              "Allow",
+              "Supported",
+              "Unsupported",
+              "Require",
+              "Proxy-Require",
+              "p-custom-header"]
 
 headers_f = list()
-for h in IANAPageCopy.split(b'|'):
-    splitted = h.split(b'\t')
+for h in IANAPageCopy.split('|'):
+    splitted = h.split('\t')
     headers_f.append((splitted[0], splitted[1]))
 
 

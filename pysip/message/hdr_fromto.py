@@ -1,7 +1,7 @@
 from pysip import PySIPException
 from pysip.message.nameaddr import NameAddress
 from pysip.message.parser_aux import check_token
-from pysip.message.hdr import Header
+from pysip.message.hdr import Header, BaseSipHeader
 from pysip.message.hparams import HParams, HParamNotFound
 
 
@@ -12,7 +12,7 @@ class FromToError(PySIPException):
     pass
 
 
-class FromToHeader(object):
+class FromToHeader(BaseSipHeader):
     DEFAULT_HOST = '127.0.0.1'
 
     def __init__(self, fromto=None):
@@ -20,16 +20,26 @@ class FromToHeader(object):
         self.uri = None
         self.params = HParams()
         if fromto is not None:
-            self.display_name, self.uri, self.params = self.parse(fromto)
+            self.display_name, self.uri, self.params = self.parse_fromto(fromto)
 
     def __eq__(self, other):
         if isinstance(other, FromToHeader):
             return self.display_name == other.display_name and self.uri == other.uri and self.params == other.params
         return NotImplemented
 
+    def build(self, header_name):
+        hdr = Header(header_name)
+        hdr.add_value(self.assemble())
+        return hdr
+
     @staticmethod
     def parse(fromto):
-        print(f'parsing {fromto}')
+        ft = FromToHeader()
+        ft.display_name, ft.uri, ft.params = FromToHeader.parse_fromto(fromto)
+        return ft
+
+    @staticmethod
+    def parse_fromto(fromto):
         if isinstance(fromto, str):
             return FromToHeader.parse_string(fromto)
         elif isinstance(fromto, Header):

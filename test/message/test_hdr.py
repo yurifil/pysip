@@ -4,8 +4,8 @@ import pytest
 from pysip.binary import to_bytes
 
 
-@pytest.mark.parametrize('header_name, header_val, expected', [(b'Content-Length', b'10', 10),
-                                                               (b'www-authenticate', b'10', 10)])
+@pytest.mark.parametrize('header_name, header_val, expected', [('Content-Length', '10', 10),
+                                                               ('www-authenticate', '10', 10)])
 def test_as_integer(header_name, header_val, expected):
     header = Header(header_name)
     header.add_value(header_val)
@@ -13,15 +13,16 @@ def test_as_integer(header_name, header_val, expected):
 
 
 def test_make_key():
-    header_name = b'Content-Length'
+    header_name = 'Content-Length'
     hdr = Header(header_name)
-    assert hdr.key == HeaderKey(b'l')
+    assert hdr.key == HeaderKey('l')
 
 
 def test_serialize_single_value():
-    hdr = Header(b'Content-Length')
-    hdr.add_value(b'10')
+    hdr = Header('Content-Length')
+    hdr.add_value('10')
     assert b'Content-Length: 10' == hdr.serialize_to_bytes()
+    assert 'Content-Length: 10' == hdr.serialize_to_string()
 
 
 def test_serialize_multi_values():
@@ -29,6 +30,7 @@ def test_serialize_multi_values():
     hdr.add_value(b'SIP/2.0/UDP bigbox3.site3.atlanta.com;branch=z9hG4bK77ef4c2312983.1')
     hdr.add_value(b'SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bK776asdhds')
     assert b'Via: SIP/2.0/UDP bigbox3.site3.atlanta.com;branch=z9hG4bK77ef4c2312983.1\r\nVia: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bK776asdhds' == hdr.serialize_to_bytes()
+    assert 'Via: SIP/2.0/UDP bigbox3.site3.atlanta.com;branch=z9hG4bK77ef4c2312983.1\r\nVia: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bK776asdhds' == hdr.serialize_to_string()
 
 
 def test_comma_split_values():
