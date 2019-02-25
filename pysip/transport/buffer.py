@@ -1,12 +1,6 @@
 from pysip import PySIPException
+from pysip.transport import MoreDataRequired
 from collections import deque
-
-MAX_MESSAGE_LENGTH_UNLIMITED = 'unlimited'
-
-
-class MoreDataRequired(object):
-    def __init__(self, state=None):
-        self.state = state
 
 
 class TransportBufferException(PySIPException):
@@ -18,6 +12,10 @@ def new_dgram(dgram_str):
     state.add(dgram_str)
     state.eof = True
     return state
+
+
+def new(options):
+    return State(options)
 
 
 class State(object):
