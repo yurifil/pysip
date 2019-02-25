@@ -2,7 +2,8 @@ from pysip import PySIPException
 
 from pysip.message.message import Message, ResponseType, RequestType
 from pysip.message.method import Method, MethodError
-from pysip.transport.buffer import MAX_MESSAGE_LENGTH_UNLIMITED, MoreDataRequired, new_dgram
+from pysip.transport.buffer import new_dgram, new
+from pysip.transport import MoreDataRequired, MAX_MESSAGE_LENGTH_UNLIMITED
 
 import re
 
@@ -48,11 +49,12 @@ class Data(object):
 class Parser(object):
     STATUS_LINE_RX = re.compile(r'SIP/2\.0 (\d{3}) (.+?)$')
 
-    def new(self, options=None):
+    @staticmethod
+    def new(options=None):
         if options is None:
             options = dict()
         if isinstance(options, dict):
-            return Data(options=DEFAULT_OPTIONS.update(options), buf=(options))
+            return Data(options={**DEFAULT_OPTIONS, **options}, buf=new(options))
         raise TransportParserError(f'Cannot initialize datagram with options {options}: options should be dict not '
                                    f'{type(options)}')
 
@@ -132,7 +134,7 @@ class Parser(object):
         else:
             line = data.buffer.read_till_crlf()
             if isinstance(line, MoreDataRequired):
-                return MoreDataRequired(data)
+                return Parser.more_data_required(data)
             if line.startswith(' ') or line.startswith('\t'):
                 data.acc.append(line)
                 return Parser.parse_headers(data)
@@ -151,14 +153,19 @@ class Parser(object):
     def parse_body(data):
         if data.content_length is None:
             try:
-                content_length = int(data.message.get('content-length').values[0])
+                [content_length] = data.message.get('content-length').values
+                content_length = int(content_length)
                 if content_length >= 0:
                     data.content_length = content_length
                     return Parser.parse_body(data)
-            except IndexError:
+                else:
+                    raise ValueError
+            except (IndexError, ValueError):
                 if data.buffer.has_eof():
                     data.content_length = data.buffer.length
                     return Parser.parse_body(data)
+                else:
+                    raise TransportParserError(f'Bad message: invalid content length.')
         else:
             content = data.buffer.read(data.content_length)
             if isinstance(content, MoreDataRequired):
@@ -203,5 +210,8 @@ class Parser(object):
         else:
             header_string = header
             rest = ''
-        header_name, header_value = header_string.split(':', 1)
-        data.message.add(header_name.strip(), header_value + rest)
+        try:
+            header_name, header_value = header_string.split(':', 1)
+            data.message.add(header_name.strip(), header_value + rest)
+        except ValueError:
+            raise TransportParserError(f'Cannot add header {header}: bad header')

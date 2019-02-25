@@ -133,8 +133,6 @@ class Message(object):
 
     @ruri.setter
     def ruri(self, ruri):
-        print(f'Message.ruri.setter: type: {self._type}')
-        print(f'Message.ruri.setter: type: {self.type}')
         if isinstance(self._type, RequestType):
             self._type.ruri = ruri
         else:
@@ -149,7 +147,6 @@ class Message(object):
     def type(self, value):
         if isinstance(value, (RequestType, ResponseType)):
             self._type = value
-            print(f'Message.type.setter: {self._type}')
         else:
             raise MessageError(f'Cannot set type {value} for message {self.serialize()}: type should be a subclass of '
                                f'MessageType.')
