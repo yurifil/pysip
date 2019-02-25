@@ -96,7 +96,7 @@ class State(object):
             return self.read_more_to_acc(length - size)
         else:
             h_part = item[0:length]
-            r_part = item[length:size - length]
+            r_part = item[length:]
             self.queue.append(r_part)
             self.acc += h_part
             self.queue_length = q_len + len(r_part)
