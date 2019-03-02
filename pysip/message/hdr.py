@@ -1,5 +1,9 @@
 from pysip.binary import to_integer, to_string, to_bytes
-from pysip.message.hnames import make_key, HeaderKey, PRINT_FORM_MAP
+from pysip.message.hnames import make_key, HeaderKey, PRINT_FORM_MAP, FROM_HEADER, TO_HEADER, CALLID_HEADER, \
+    MAXFORWARDS_HEADER, EXPIRES_HEADER, CSEQ_HEADER, VIA_HEADER, CONTACT_HEADER, SUPPORTED_HEADER, UNSUPPORTED_HEADER, \
+    ALLOW_HEADER, ROUTE_HEADER, RECORD_ROUTE_HEADER, REQUIRE_HEADER, PROXY_REQUIRE_HEADER, ACCEPT_HEADER, \
+    ACCEPT_ENCODING_HEADER, ACCEPT_LANGUAGE_HEADER, WWW_AUTHENTICATE_HEADER, AUTHORIZATION_HEADER, \
+    PROXY_AUTHENTICATE_HEADER, PROXY_AUTHORIZATION_HEADER
 from pysip import PySIPException
 
 
@@ -8,28 +12,28 @@ def may_have_multiple_values(header_key):
 
 
 MAY_HAVE_MULTIPLE_VALUE_MAP = {
-    make_key('from'): False,  # From
-    make_key('to'): False,  # To
-    make_key('call-id'): False,  # Call-ad
-    make_key('max-forwards'): False,
-    make_key('expires'): False,
-    make_key('cseq'): False,
-    make_key('via'): True,  # Via
-    make_key('contact'): False,  # Contact
-    make_key('supported'): True,  # Supported
-    make_key('unsupported'): True,
-    make_key('allow'): True,
-    make_key('route'): True,
-    make_key('record-route"'): True,
-    make_key('require'): True,
-    make_key('proxy-require'): True,
-    make_key('accept'): True,
-    make_key('accept-encoding'): True,
-    make_key('accept-language'): True,
-    make_key('www-authenticate'): True,  # WWW-Authenticate may have multiple values but they can't be comma separated
-    make_key('authorization'): True,  # Authorization may have multiple values but they can't be comma separated
-    make_key('proxy-authenticate'): True,  # Proxy-Authenticate may have multiple values but they can't be comma separated
-    make_key('proxy-authorization'): True  # Proxy-Authorization may have multiple values but they can't be comma separated
+    make_key(FROM_HEADER): False,  # From
+    make_key(TO_HEADER): False,  # To
+    make_key(CALLID_HEADER): False,  # Call-ad
+    make_key(MAXFORWARDS_HEADER): False,
+    make_key(EXPIRES_HEADER): False,
+    make_key(CSEQ_HEADER): False,
+    make_key(VIA_HEADER): True,  # Via
+    make_key(CONTACT_HEADER): False,  # Contact
+    make_key(SUPPORTED_HEADER): True,  # Supported
+    make_key(UNSUPPORTED_HEADER): True,
+    make_key(ALLOW_HEADER): True,
+    make_key(ROUTE_HEADER): True,
+    make_key(RECORD_ROUTE_HEADER): True,
+    make_key(REQUIRE_HEADER): True,
+    make_key(PROXY_REQUIRE_HEADER): True,
+    make_key(ACCEPT_HEADER): True,
+    make_key(ACCEPT_ENCODING_HEADER): True,
+    make_key(ACCEPT_LANGUAGE_HEADER): True,
+    make_key(WWW_AUTHENTICATE_HEADER): True,  # WWW-Authenticate may have multiple values but they can't be comma separated
+    make_key(AUTHORIZATION_HEADER): True,  # Authorization may have multiple values but they can't be comma separated
+    make_key(PROXY_AUTHENTICATE_HEADER): True,  # Proxy-Authenticate may have multiple values but they can't be comma separated
+    make_key(PROXY_AUTHORIZATION_HEADER): True  # Proxy-Authorization may have multiple values but they can't be comma separated
 }
 
 

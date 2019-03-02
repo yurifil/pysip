@@ -1,6 +1,5 @@
 import ipaddress
-
-URI_KEY_PARAMS = ['user', 'transport', 'ttl', 'method']
+from pysip import PySIPException
 
 PARAM_TRANSPORT = 'transport'
 PARAM_MADDR = 'maddr'
@@ -12,6 +11,9 @@ PARAM_TTL = 'ttl'
 PARAM_RECEIVED = 'received'
 PARAM_BRANCH = 'branch'
 PARAM_RPORT = 'rport'
+PARAM_METHOD = 'method'
+
+URI_KEY_PARAMS = [PARAM_USER, PARAM_TRANSPORT, PARAM_TTL, PARAM_METHOD]
 
 
 def _ip_literal(address):
@@ -32,7 +34,7 @@ def _ipv4_address(address):
         return None
 
 
-class URIParseError(ValueError):
+class URIParseError(PySIPException):
     pass
 
 

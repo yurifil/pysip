@@ -42,7 +42,7 @@ def test_invalid_lr():
     hdr = Header('Route')
     hdr.add_value('<sip:alice@atlanta.com>;lr')
     route_hdr = RouteHeader(hdr)
-    assert route_hdr.first.uri.params is None
+    assert not route_hdr.first.uri.params
 
 
 @pytest.mark.parametrize('val', ['?',
@@ -59,7 +59,7 @@ def test_parse_error(val):
 def test_empty_route_set():
     hdr = Header('Route')
     route_hdr = RouteHeader(hdr)
-    assert not route_hdr.route_set
+    assert route_hdr.route_set.is_empty()
 
 
 @pytest.mark.parametrize('val', ['<sip:alice@atlanta.com>,<sip:carol@chicago.com>,<sip:bob@biloxi.com>',

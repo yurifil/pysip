@@ -29,8 +29,28 @@ CALLID_HEADER = 'call-id'
 CSEQ_HEADER = 'cseq'
 MAXFORWARDS_HEADER = 'max-forwards'
 VIA_HEADER = 'via'
-ALLOW_HEADER = 'Allow'
-CONTACT_HEADER = 'Contact'
+ALLOW_HEADER = 'allow'
+CONTACT_HEADER = 'contact'
+PROXY_REQUIRE_HEADER = 'proxy-require'
+RECORD_ROUTE_HEADER = 'record-route'
+ROUTE_HEADER = 'route'
+CONTENT_TYPE_HEADER = 'content-type'
+UNSUPPORTED_HEADER = 'unsupported'
+SUPPORTED_HEADER = 'supported'
+REQUIRE_HEADER = 'require'
+TOPMOST_VIA_HEADER = 'topmost_via'
+DATE_HEADER = 'date'
+EXPIRES_HEADER = 'expires'
+MIN_EXPIRES_HEADER = 'min-expires'
+ACCEPT_HEADER = 'accept'
+ACCEPT_ENCODING_HEADER = 'accept-encoding'
+ACCEPT_LANGUAGE_HEADER = 'accept-language'
+WWW_AUTHENTICATE_HEADER = 'www-authenticate'
+AUTHORIZATION_HEADER = 'authorization'
+PROXY_AUTHENTICATE_HEADER = 'proxy-authenticate'
+PROXY_AUTHORIZATION_HEADER = 'proxy-authorization'
+CONTENT_LENGTH_HEADER = 'content-length'
+CONTENT_ENCODING_HEADER = 'content-encoding'
 
 
 PRINT_FORM_MAP = {HeaderKey('f'): 'From',
@@ -55,13 +75,13 @@ PRINT_FORM_MAP = {HeaderKey('f'): 'From',
 
 COMPACT_FORM_MAP = {'accept-contact': 'a',
                     'allow-events': 'u',
-                    'call-id': 'i',
-                    'contact': 'm',
-                    'content-encoding': 'e',
-                    'content-length': 'l',
-                    'content-type': 'c',
+                    CALLID_HEADER: 'i',
+                    CONTACT_HEADER: 'm',
+                    CONTENT_ENCODING_HEADER: 'e',
+                    CONTENT_LENGTH_HEADER: 'l',
+                    CONTENT_TYPE_HEADER: 'c',
                     'event': 'o',
-                    'from': 'f',
+                    FROM_HEADER: 'f',
                     'identity': 'y',
                     'refer-to': 'r',
                     'referred-by': 'b',
@@ -69,48 +89,48 @@ COMPACT_FORM_MAP = {'accept-contact': 'a',
                     'request-disposition': 'd',
                     'session-expires': 'x',
                     'subject': 's',
-                    'supported': 'k',
-                    'to': 't',
-                    'via': 'v'}
+                    SUPPORTED_HEADER: 'k',
+                    TO_HEADER: 't',
+                    VIA_HEADER: 'v'}
 
-KNOWN_HEADER_KEY_MAP = {'from': HeaderKey('f'),
-                        'to': HeaderKey('t'),
-                        'cseq': HeaderKey('cseq'),
-                        'callid': HeaderKey('i'),
-                        'maxforwards': HeaderKey('max-forwards'),
-                        'content_type': HeaderKey('c'),
-                        'route': HeaderKey('route'),
-                        'record_route': HeaderKey('record-route'),
-                        'allow': HeaderKey('allow'),
-                        'supported': HeaderKey('k'),
-                        'unsupported': HeaderKey('unsupported'),
-                        'require': HeaderKey('require'),
-                        'proxy_require': HeaderKey('proxy-require'),
-                        'contact': HeaderKey('m'),
-                        'expires': HeaderKey('expires'),
-                        'minexpires': HeaderKey('min-expires'),
-                        'date': HeaderKey('date'),
-                        'topmost_via': HeaderKey('v')
+KNOWN_HEADER_KEY_MAP = {FROM_HEADER: HeaderKey('f'),
+                        TO_HEADER: HeaderKey('t'),
+                        CSEQ_HEADER: HeaderKey('cseq'),
+                        CALLID_HEADER: HeaderKey('i'),
+                        MAXFORWARDS_HEADER: HeaderKey('max-forwards'),
+                        CONTENT_TYPE_HEADER: HeaderKey('c'),
+                        ROUTE_HEADER: HeaderKey('route'),
+                        RECORD_ROUTE_HEADER: HeaderKey('record-route'),
+                        ALLOW_HEADER: HeaderKey('allow'),
+                        SUPPORTED_HEADER: HeaderKey('k'),
+                        UNSUPPORTED_HEADER: HeaderKey('unsupported'),
+                        REQUIRE_HEADER: HeaderKey('require'),
+                        PROXY_REQUIRE_HEADER: HeaderKey('proxy-require'),
+                        CONTACT_HEADER: HeaderKey('m'),
+                        EXPIRES_HEADER: HeaderKey('expires'),
+                        MIN_EXPIRES_HEADER: HeaderKey('min-expires'),
+                        DATE_HEADER: HeaderKey('date'),
+                        TOPMOST_VIA_HEADER: HeaderKey('v')
                         }
 
-ALL_KNOWN_HEADERS = ['from',
-                     'to',
-                     'call-id',
-                     'cseq',
-                     'maxforwards',
-                     'topmost_via',
-                     'content_type',
-                     'allow',
-                     'supported',
-                     'unsupported',
-                     'require',
-                     'proxy_require',
-                     'route',
-                     'record_route',
-                     'contact',
-                     'expires',
-                     'minexpires',
-                     'date'
+ALL_KNOWN_HEADERS = [FROM_HEADER,
+                     TO_HEADER,
+                     CALLID_HEADER,
+                     CSEQ_HEADER,
+                     MAXFORWARDS_HEADER,
+                     TOPMOST_VIA_HEADER,
+                     CONTENT_TYPE_HEADER,
+                     ALLOW_HEADER,
+                     SUPPORTED_HEADER,
+                     UNSUPPORTED_HEADER,
+                     REQUIRE_HEADER,
+                     PROXY_REQUIRE_HEADER,
+                     ROUTE_HEADER,
+                     RECORD_ROUTE_HEADER,
+                     CONTACT_HEADER,
+                     EXPIRES_HEADER,
+                     MIN_EXPIRES_HEADER,
+                     DATE_HEADER
                      ]
 
 

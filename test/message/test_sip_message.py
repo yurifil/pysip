@@ -1,20 +1,18 @@
 import pytest
-from pysip.message.sip_message import SipMessage, SipMessageError, SipHeaderError, ALL, NotFound
+from pysip.message.sip_message import SipMessage, SipMessageError, SipHeaderError, ALL, NotFound, SIPMessageParseError
 from pysip.message.hdr import Header
 from pysip.message.hdr_callid import CallIDHeader
 from pysip.message.hdr_maxforwards import MaxForwardsHeader
 from pysip.message.hdr_via import SentBy
 from pysip.message.hdr_cseq import CSeqHeaderError
-from pysip.message.hdr_content_type import ContentTypeHeaderError
-from pysip.message.hdr_contact import ContactHeader
 from pysip.message.method import INVITE
-from pysip.message.hnames import CALLID_HEADER, MAXFORWARDS_HEADER, CONTACT_HEADER, VIA_HEADER
-from pysip.message.message import TYPE_REQUEST, TYPE_RESPONSE
+from pysip.message.hnames import CALLID_HEADER, MAXFORWARDS_HEADER, CONTACT_HEADER
+from pysip.message.message import TYPE_REQUEST
 from pysip.message.parser_aux import check_token
 from pysip.uri.uri_parser import URIParseError
 from pysip.uri.uri import Uri
 
-from pysip.reply import ReplyError, ReplyOptions
+from pysip.reply import ReplyOptions
 
 
 def test_parse_request():
@@ -213,7 +211,7 @@ def test_parse_on_demand_parse_error():
           '\r\n\r\nTest'
     sip_msg = SipMessage.parse(msg, [])
     assert sip_msg.callid == CallIDHeader(callid)
-    with pytest.raises(ContentTypeHeaderError):
+    with pytest.raises(SipHeaderError):
         sip_msg.get('content-type')
 
 
@@ -437,13 +435,13 @@ def test_cannot_set_status_of_request():
                                  'SIP/2.0 200 OK',
                                  'INVITE sip:alice@atlanta.com SIP/2.0\r\n'))
 def test_truncated_message_error(raw):
-    with pytest.raises(SipMessageError) as excinfo:
+    with pytest.raises(SIPMessageParseError) as excinfo:
         SipMessage.parse(raw, ALL)
     assert 'truncated' in str(excinfo.value)
 
 
 def test_generic_parse_error():
-    with pytest.raises(SipMessageError):
+    with pytest.raises(SIPMessageParseError):
         SipMessage.parse('INVITE sip:alice@atlanta.com SIP/2.0\r\nContent-Length: 100\r\n\r\n', ALL)
 
 

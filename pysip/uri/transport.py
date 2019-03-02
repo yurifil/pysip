@@ -80,6 +80,16 @@ class Transport(object):
         elif transport.known == UNKNOWN:
             return None
 
+    @staticmethod
+    def is_tls(transport):
+        if transport.known == KNOWN:
+            if transport.name in (TCP, UDP, WS):
+                return False
+            elif transport.name in (TLS, WSS):
+                return True
+        raise TransportError(f'Unknown transport')
+
+
 '''
 -spec parse_bin(binary()) -> transport() | {error, {einval, transport}}.
 parse_bin(V) ->

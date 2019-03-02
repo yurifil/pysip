@@ -2,7 +2,9 @@ from pysip import PySIPException
 from pysip.message.hdr import Header, BaseSipHeader
 from pysip.message.nameaddr import NameAddress, NameAddressError
 from pysip.message.parser_aux import parse_params
+from pysip.message.route_set import RouteSet
 from pysip.uri import PARAM_LR
+from pysip.uri.uri import Uri
 
 
 class RouteHeaderError(PySIPException):
@@ -10,16 +12,25 @@ class RouteHeaderError(PySIPException):
 
 
 class Route(object):
-    def __init__(self, nameaddr, params):
+    def __init__(self, nameaddr=None, params=None):
         self.nameaddr = nameaddr
+        if params is None:
+            params = list()
         self.params = params
-        self.uri = self.nameaddr.uri
-        self.display_name = self.nameaddr.display_name
+        if nameaddr is not None:
+            self.uri = self.nameaddr.uri
+            self.display_name = self.nameaddr.display_name
+        else:
+            self.uri = None
+            self.display_name = None
 
     def __eq__(self, other):
         if isinstance(other, Route):
-            return self.nameaddr == other.nameaddr and self.params == other.params
+            return self.display_name == other.display_name and self.uri == other.uri and self.params == other.params
         return NotImplemented
+
+    def __repr__(self):
+        return self.assemble()
 
     def is_loose_route(self):
         return PARAM_LR in self.uri.params
@@ -35,12 +46,13 @@ class Route(object):
         params = ';'.join(params_list)
         if params:
             params = f';{params}'
+
         return f'{nameaddr}{params}'
 
 
 class RouteHeader(BaseSipHeader):
     def __init__(self, route_header=None):
-        self.route_set = list()
+        self.route_set = RouteSet()
         if route_header is not None:
             self.route_set = self.parse_route_header(route_header)
 
@@ -56,14 +68,16 @@ class RouteHeader(BaseSipHeader):
     @staticmethod
     def parse_route_header(route_header):
         if isinstance(route_header, Header):
-            route_set = list()
+            route_set = RouteSet()
             for val in route_header.values:
                 nameaddr, parsed_params = RouteHeader.parse_route(val)
                 route_set.append(Route(nameaddr, parsed_params))
             return route_set
         elif isinstance(route_header, str):
+            route_set = RouteSet()
             nameaddr, parsed_params = RouteHeader.parse_route(route_header)
-            return [Route(nameaddr, parsed_params)]
+            route_set.append(Route(nameaddr, parsed_params))
+            return route_set
         else:
             raise RouteHeaderError(f'Cannot parse route {route_header}: should be type Header not {type(route_header)}')
 
@@ -89,8 +103,15 @@ class RouteHeader(BaseSipHeader):
 
     @property
     def first(self):
-        if self.route_set:
-            return self.route_set[0]
+        if not self.route_set.is_empty():
+            return self.route_set.first
+        else:
+            return None
+
+    @property
+    def last(self):
+        if not self.route_set.is_empty():
+            return self.route_set.last
         else:
             return None
 
@@ -99,6 +120,50 @@ class RouteHeader(BaseSipHeader):
         for r in self.route_set:
             hdr.add_value(r.assemble())
         return hdr
+
+    @staticmethod
+    def make_route(route):
+        """Makes Route object out of str or Uri instance
+
+        Args:
+            route (str or :obj:Uri)
+
+        Returns:
+            :obj:Route - Route instance.
+        """
+        if isinstance(route, str):
+            nameaddr, params = RouteHeader.parse_route(route)
+            return Route(nameaddr=nameaddr, params=params)
+        elif isinstance(route, Uri):
+            r = Route()
+            r.uri = route
+            r.display_name = ''
+            return r
+
+    def assemble(self):
+        """Assembles RouteHeader string.
+
+        Returns:
+            str - string representation of Route header object
+        """
+        hdr = self.build('Route')
+        return ','.join(hdr.values)
+
+    @staticmethod
+    def make(route):
+        """Makes route header out of route string.
+
+        Args:
+            route (str):
+
+        Returns:
+            :obj:RouteHeader - RouteHeader instance.
+        """
+        h = Header('Route')
+        h.add_value(route)
+        return RouteHeader.parse(h)
+
+
 '''
 -spec make_route(binary() | ersip_uri:uri()) -> route().
 make_route(Bin) when is_binary(Bin) ->
@@ -110,21 +175,6 @@ make_route(Bin) when is_binary(Bin) ->
     end;
 make_route(URI) ->
     #route{display_name = {display_name, []}, uri = URI}.
-
--spec assemble_route(route()) -> iolist().
-assemble_route(#route{} = Route) ->
-    #route{display_name = DN,
-           uri = URI,
-           params = ParamsList
-          } = Route,
-    [ersip_nameaddr:assemble(DN, URI),
-     lists:map(fun({Key, Value}) when is_binary(Value) ->
-                       [<<";">>, Key, <<"=">>, Value];
-                  ({Key, novalue})  ->
-                       [<<";">>, Key]
-               end,
-               ParamsList)
-    ].
 
 parse_route_params(<<$;, Bin/binary>>) ->
     parse_route_params(Bin);
@@ -273,6 +323,21 @@ build(HdrName, {route_set, _} = RouteSet) ->
       end,
       Hdr,
       RouteSet).
+
+-spec assemble_route(route()) -> iolist().
+assemble_route(#route{} = Route) ->
+    #route{display_name = DN,
+           uri = URI,
+           params = ParamsList
+          } = Route,
+    [ersip_nameaddr:assemble(DN, URI),
+     lists:map(fun({Key, Value}) when is_binary(Value) ->
+                       [<<";">>, Key, <<"=">>, Value];
+                  ({Key, novalue})  ->
+                       [<<";">>, Key]
+               end,
+               ParamsList)
+    ].
 
 %%%===================================================================
 %%% Helpers

@@ -123,6 +123,7 @@ class Parser(object):
 
     @staticmethod
     def parse_headers(data):
+        #print(f'Parser.parse_headers({data})')
         if not data.acc:
             line = data.buffer.read_till_crlf()
             if line == '':

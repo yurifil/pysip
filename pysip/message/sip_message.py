@@ -1,7 +1,9 @@
 from pysip import PySIPException
 from pysip.uri.uri import Uri
 from pysip.message.hnames import FROM_HEADER, TO_HEADER, CALLID_HEADER, CSEQ_HEADER, MAXFORWARDS_HEADER, VIA_HEADER, \
-    KNOWN_HEADER_KEY_MAP, ALL_KNOWN_HEADERS_KEYS, PRINT_FORM_MAP
+    KNOWN_HEADER_KEY_MAP, ALL_KNOWN_HEADERS_KEYS, PRINT_FORM_MAP, CONTENT_TYPE_HEADER, ROUTE_HEADER, \
+    RECORD_ROUTE_HEADER, ALLOW_HEADER, SUPPORTED_HEADER, UNSUPPORTED_HEADER, REQUIRE_HEADER, PROXY_REQUIRE_HEADER, \
+    CONTACT_HEADER, EXPIRES_HEADER, MIN_EXPIRES_HEADER, DATE_HEADER
 from pysip.message.method import Method
 from pysip.message.hdr import Header, BaseSipHeader
 from pysip.message.hnames import make_key
@@ -18,6 +20,7 @@ from pysip.message.hdr_opttag_list import OptTagListHeader
 from pysip.message.hdr_contact_list import ContactHeaderList
 from pysip.message.hdr_expires import ExpiresHeader
 from pysip.message.hdr_date import DateHeader
+from pysip.message.hdr import HeaderKey
 from pysip.reply import ReplyOptions, AUTO
 from pysip.message.pysip_id import generate_token
 
@@ -33,6 +36,22 @@ REQUIRED_OPTIONAL = 'optional'
 ALL = 'ALL'
 # TODO: add type annotations here and there
 # TODO: SipHeader interface is ugly, refactor needed
+
+
+def bad_request_reason(error):
+    if isinstance(error, SipHeaderError):
+        if isinstance(error.header, HeaderKey):
+            header = error.header.header
+        elif isinstance(error.header, Header):
+            header = error.header.name
+        elif isinstance(error.header, str):
+            header = error.header
+        else:
+            raise PySIPException(f'Cannot get bad request reason for error {error}. Unsupported error.header type: '
+                                 f'{type(error.header)}')
+        return f'Invalid {header} value'
+    else:
+        return 'Bad request'
 
 
 class SIPMessageParseError(PySIPException):
@@ -63,6 +82,14 @@ class SipMessage(object):
         self._ruri = None
         self.headers = dict()
         self.user = None
+
+    @property
+    def source(self):
+        return self.raw_message.source
+
+    @source.setter
+    def source(self, value):
+        self.raw_message.source = value
 
     @property
     def user_data(self):
@@ -296,9 +323,9 @@ class SipMessage(object):
             try:
                 parsed_msg, data = Parser.parse(p)
             except Exception as e:
-                raise SipMessageError(f'Cannot parse message {message}: {e}')
+                raise SIPMessageParseError(f'Cannot parse message {message}: {e}')
             if isinstance(parsed_msg, MoreDataRequired):
-                raise SipMessageError(f'Cannot parse message {message}: truncated message.')
+                raise SIPMessageParseError(f'Cannot parse message {message}: truncated message.')
             return SipMessage.parse(parsed_msg, headers_list)
         elif isinstance(message, Message):
             headers_to_parse = headers_list
@@ -337,7 +364,10 @@ class SipMessage(object):
             header (str or HeaderKey): header name.
             message (SipMessage): SIP message to be changed.
         """
-        hdr = SipHeader.parse_header(header, message)
+        try:
+            hdr = SipHeader.parse_header(header, message)
+        except SipHeaderError as e:
+            raise e
         if isinstance(hdr, NoHeader):
             # do nothing, message is not changed
             pass
@@ -499,7 +529,7 @@ class SipMessage(object):
         """
         status = reply.status
         method = self.method
-        reply_msg = SipMessage.new_reply(status, method=method)
+        reply_msg = SipMessage.new_reply(status, method=method, reason=reply.reason)
         # 8.2.6.1 Sending a Provisional Response
         # When a 100 (Trying) response is generated, any
         # Timestamp header field present in the request MUST be
@@ -547,11 +577,19 @@ class Description(object):
         return f'{self.__class__.__name__}: required {self.required}, header_class: {self.header_class.__name__}'
 
     def parse_header(self, header):
-        return self.header_class.parse(header)
+        try:
+            return self.header_class.parse(header)
+        except Exception as e:
+            raise DescriptionError(f'Cannot parse header {header}: {e}')
 
 
 class SipHeaderError(PySIPException):
-    pass
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.header = None
+
+    def set_header(self, header):
+        self.header = header
 
 
 class RequiredEssentials(object):
@@ -577,6 +615,7 @@ class SipHeader(object):
         """
         if make_key(header) in src_msg.headers:
             dst_msg.headers[make_key(header)] = src_msg.headers[make_key(header)]
+        else:
             SipHeader.copy_raw_header(make_key(header), src_msg, dst_msg)
         if make_key(header) not in ALL_KNOWN_HEADERS_KEYS:
             SipHeader.copy_raw_header(make_key(header), src_msg, dst_msg)
@@ -594,7 +633,8 @@ class SipHeader(object):
         descr = SipHeader.header_descr(header_name)
         print_name = PRINT_FORM_MAP.get(make_key(header_name), header_name)
         raw_hdr = Header(print_name)
-        raw_hdr.add_value(header_value.assemble())
+        if header_value.assemble():
+            raw_hdr.add_value(header_value.assemble())
         if not raw_hdr.values:
             msg.headers.pop(make_key(header_name), None)
             msg.raw_message.delete_header(make_key(header_name))
@@ -628,7 +668,14 @@ class SipHeader(object):
         if isinstance(hdr, NoHeader):
             return hdr
         if isinstance(hdr, Header):
-            return descr.parse_header(hdr)
+            try:
+                return descr.parse_header(hdr)
+            except DescriptionError as e:
+                exc = SipHeaderError(e)
+                if isinstance(header, HeaderKey):
+                    header = PRINT_FORM_MAP.get(header, f'Unknown header {header}')
+                exc.set_header(header)
+                raise exc
         raise SipHeaderError(f'Cannot parse header {header}: header should be of type Header not {type(header)}')
 
     @staticmethod
@@ -636,7 +683,11 @@ class SipHeader(object):
         hdr = msg.raw_message.get(header)
         if not hdr.values:
             if SipHeader.is_required(msg, descr.required):
-                raise SipHeaderError(f'Cannot get required header {header}: no header.')
+                if isinstance(header, HeaderKey):
+                    hdr_name = PRINT_FORM_MAP.get(header)
+                else:
+                    hdr_name = header
+                raise SipHeaderError(f'Cannot get required header "{hdr_name}": no header.')
             return NoHeader()
         return hdr
 
@@ -672,30 +723,30 @@ class SipHeader(object):
     @staticmethod
     def header_descr(header):
         header_key = make_key(header)
-        if header_key == make_key('from') or header_key == make_key('to'):
+        if header_key == make_key(FROM_HEADER) or header_key == make_key(TO_HEADER):
             return Description(required=REQUIRED_ALL, header_class=FromToHeader)
-        elif header_key == make_key('cseq'):
+        elif header_key == make_key(CSEQ_HEADER):
             return Description(required=REQUIRED_ALL, header_class=CSeqHeader)
-        elif header_key == make_key('callid') or header_key == make_key('call-id'):
+        elif header_key == make_key(CALLID_HEADER):
             return Description(required=REQUIRED_ALL, header_class=CallIDHeader)
-        elif header_key == make_key('max-forwards'):
+        elif header_key == make_key(MAXFORWARDS_HEADER):
             return Description(required=REQUIRED_OPTIONAL, header_class=MaxForwardsHeader)
-        elif header_key == make_key('topmost_via') or header_key == make_key('via'):
+        elif header_key == make_key(VIA_HEADER):
             return Description(required=REQUIRED_REQUESTS, header_class=ViaHeader)
-        elif header_key == make_key('content-type'):
+        elif header_key == make_key(CONTENT_TYPE_HEADER):
             return Description(required=REQUIRED_WITH_BODY, header_class=ContentTypeHeader)
-        elif header_key == make_key('route') or header_key == make_key('record-route'):
+        elif header_key == make_key(ROUTE_HEADER) or header_key == make_key(RECORD_ROUTE_HEADER):
             return Description(required=REQUIRED_OPTIONAL, header_class=RouteHeader)
-        elif header_key == make_key('allow'):
+        elif header_key == make_key(ALLOW_HEADER):
             return Description(required=REQUIRED_OPTIONAL, header_class=AllowHeader)
-        elif header_key in (make_key('supported'), make_key('unsupported'), make_key('require'),
-                            make_key('proxy-require')):
+        elif header_key in (make_key(SUPPORTED_HEADER), make_key(UNSUPPORTED_HEADER), make_key(REQUIRE_HEADER),
+                            make_key(PROXY_REQUIRE_HEADER)):
             return Description(required=REQUIRED_OPTIONAL, header_class=OptTagListHeader)
-        elif header_key == make_key('contact'):
+        elif header_key == make_key(CONTACT_HEADER):
             return Description(required=REQUIRED_OPTIONAL, header_class=ContactHeaderList)
-        elif header_key == make_key('expires') or header_key == make_key('min-expires'):
+        elif header_key == make_key(EXPIRES_HEADER) or header_key == make_key(MIN_EXPIRES_HEADER):
             return Description(required=REQUIRED_OPTIONAL, header_class=ExpiresHeader)
-        elif header_key == make_key('date'):
+        elif header_key == make_key(DATE_HEADER):
             return Description(required=REQUIRED_OPTIONAL, header_class=DateHeader)
 
 

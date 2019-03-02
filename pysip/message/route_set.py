@@ -9,8 +9,16 @@ class RouteSet(object):
     def __init__(self):
         self.routes = list()
 
+    def __getitem__(self, item):
+        return self.routes[item]
+
     def __repr__(self):
-        return ', '.join(self.routes)
+        return ', '.join([str(r) for r in self.routes])
+
+    def __eq__(self, other):
+        if isinstance(other, RouteSet):
+            return self.routes == other.routes
+        return NotImplemented
 
     def is_empty(self):
         return len(self.routes) == 0
@@ -44,3 +52,6 @@ class RouteSet(object):
         if not self.is_empty():
             return self.routes[-1]
         raise RouteSetError(f'Cannot get last route: empty route set.')
+
+    def append(self, route):
+        self.add_last(route)

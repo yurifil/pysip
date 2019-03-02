@@ -34,12 +34,13 @@ class AllowHeader(Header, BaseSipHeader):
         return AllowHeader(method_set=MethodSet(method_list))
 
     def assemble(self):
-        return ', '.join(self.method_set.to_list())
+        return ', '.join([str(m) for m in self.method_set.to_list()])
 
     def build(self, header_name):
         hdr = Header(header_name)
         hdr.add_value(self.assemble())
         return hdr
+
 
 
 '''
