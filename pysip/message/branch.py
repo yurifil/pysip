@@ -32,6 +32,9 @@ class Branch(object):
     def make_key(self):
         return BranchKey(self)
 
+    def is_rfc3261(self):
+        return is_rfc3261(self)
+
 
 class BranchKey(object):
     ENCODING = 'utf-8'

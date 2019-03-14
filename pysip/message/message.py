@@ -1,7 +1,7 @@
 from pysip import PySIPException
 from pysip.message.hnames import make_key
 from pysip.message.hdr import Header
-from pysip.message.method import Method, MethodError
+from pysip.message.method import Method
 
 ITEM_TYPE = 'type'
 ITEM_STATUS = 'status'

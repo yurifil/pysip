@@ -45,6 +45,9 @@ class Data(object):
     def add(self, string):
         self.buffer.add(string)
 
+    def reset_message(self):
+        self.message = Message()
+
 
 class Parser(object):
     STATUS_LINE_RX = re.compile(r'SIP/2\.0 (\d{3}) (.+?)$')
@@ -64,13 +67,17 @@ class Parser(object):
 
     @staticmethod
     def parse(data):
+        print(f'Parser.parse({data})')
         if data.state == STATE_FIRST_LINE:
+            print(f'Parser.parse(): state STATE_FIRST_LINE')
             return Parser.parse_first_line(data)
         elif data.state == STATE_HEADERS:
+            print(f'Parser.parse(): state STATE_HEADERS')
             return Parser.parse_headers(data)
         elif data.state == STATE_BODY:
-            message = Parser.parse_body(data)
-            return message
+            print(f'Parser.parse(): state STATE_BODY')
+            message, data = Parser.parse_body(data)
+            return message, data
 
     @staticmethod
     def parse_first_line(data):
@@ -123,7 +130,6 @@ class Parser(object):
 
     @staticmethod
     def parse_headers(data):
-        #print(f'Parser.parse_headers({data})')
         if not data.acc:
             line = data.buffer.read_till_crlf()
             if line == '':
@@ -152,6 +158,7 @@ class Parser(object):
 
     @staticmethod
     def parse_body(data):
+        print(f'Parser.parse_body({data})')
         if data.content_length is None:
             try:
                 [content_length] = data.message.get('content-length').values
@@ -198,7 +205,9 @@ class Parser(object):
     def message_parsed(data, length):
         if isinstance(data.options['max_message_len'], int) and length > data.options['max_message_len']:
             raise TransportParserError(f'Message too long')
-        return data.message, data
+        message = data.message
+        data.reset_message()
+        return message, data
 
     @staticmethod
     def add_header(header, data):

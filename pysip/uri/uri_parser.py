@@ -262,7 +262,7 @@ class SIPUriParser(object):
     def validate_host(self, host):
         """
         Args:
-            host:
+            host (str):
 
         Returns:
             str: if host is a valid url,

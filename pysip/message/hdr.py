@@ -11,6 +11,10 @@ def may_have_multiple_values(header_key):
     return MAY_HAVE_MULTIPLE_VALUE_MAP.get(header_key, False)
 
 
+class NoHeaderError(PySIPException):
+    pass
+
+
 MAY_HAVE_MULTIPLE_VALUE_MAP = {
     make_key(FROM_HEADER): False,  # From
     make_key(TO_HEADER): False,  # To
@@ -122,6 +126,14 @@ class Header(object):
             else:
                 ret_val = to_string(append_value)
         return ret_val
+
+    def take_topmost(self):
+        if len(self.values) == 0:
+            raise NoHeaderError()
+        return self.values.pop(0)
+
+    def replace_topmost(self, value):
+        self.values[0] = value
 
 '''
 serialize_to_bin(Header) ->
