@@ -31,15 +31,15 @@ class CharTable(object):
         if x in cls.char_map:
             return cls.char_map.get(x)
         if DIGIT_SHIFT <= x < SMALL_ALPHA_SHIFT:
-            return x - DIGIT_SHIFT + ord('0')
+            return chr(x - DIGIT_SHIFT + ord('0'))
         if SMALL_ALPHA_SHIFT <= x < CAP_ALPHA_SHIFT:
-            return x - SMALL_ALPHA_SHIFT + ord('a')
+            return chr(x - SMALL_ALPHA_SHIFT + ord('a'))
         if CAP_ALPHA_SHIFT <= x < CAP_ALPHA_SHIFT + CAP_ALPHA_SIZE:
-            return x - CAP_ALPHA_SHIFT + ord('A')
+            return chr(x - CAP_ALPHA_SHIFT + ord('A'))
 
     @classmethod
     def tfun(cls, x):
-        cls.token_translate(x)
+        return cls.token_translate(x)
 
 
 def token(binary):
@@ -51,13 +51,21 @@ def generate_token(length):
 
 
 def encode(binary, token_tab):
-    return encode_impl(binary, token_tab, 0, [])
+    ret_val = encode_impl(binary, token_tab, 0, '')
+    return ret_val
 
 
-def encode_impl(binary, char_table, non_neg_integer, bytes_list):
-    for sym in binary:
-        print(f'id.encode_impl(): {sym}')
-        print(sym, char_table.token_translate(sym), chr(char_table.token_translate(sym)))
+def encode_impl(string, char_table, non_neg_integer, return_string):
+    if not string and non_neg_integer == 0:
+        return return_string
+    if not string and non_neg_integer < char_table.size:
+        return encode_impl(string, char_table, 0, return_string + char_table.tfun(non_neg_integer))
+    if non_neg_integer >= char_table.size:
+        return encode_impl(string, char_table, non_neg_integer // char_table.size, return_string +
+                           char_table.tfun(non_neg_integer % char_table.size))
+    if non_neg_integer <= char_table.size:
+        return encode_impl(string[1:], char_table, non_neg_integer * 256 + ord(string[0]), return_string)
+
 
 
 

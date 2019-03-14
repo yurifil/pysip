@@ -1,6 +1,7 @@
 from pysip.uri.uri import Uri
 from pysip.uri import URIParseError, UserParseError, ParamParseError, PARAM_TRANSPORT, PARAM_LR, PARAM_USER,\
     PARAM_MADDR, PARAM_TTL, HostParseError, SIPUriError
+from pysip import PySIPException
 import ipaddress
 import pytest
 
@@ -85,7 +86,7 @@ def test_host_only():
                                      b'sip:[::1]x'
                                      ])
 def test_invalid_hostport(uri_str):
-    with pytest.raises(ValueError):
+    with pytest.raises(PySIPException):
         Uri(uri_str)
 
 

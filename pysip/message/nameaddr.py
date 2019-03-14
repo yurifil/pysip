@@ -13,6 +13,11 @@ class NameAddress(object):
     BRACKETS_ADDRESS_RX = re.compile(r'\s*<(.*?)>(.*)')
     NO_DISPLAY_NAME_RX = re.compile(r'^(.*?)([,;].*)')
 
+    def __eq__(self, other):
+        if isinstance(other, NameAddress):
+            return self.display_name == other.display_name and self.uri == other.uri
+        return NotImplemented
+
     def __init__(self, string=None):
         self.display_name = None
         self.uri = None

@@ -1,11 +1,12 @@
 from pysip.message.hdr_opttag_list import OptTagListHeader, OptTagListHeaderError
+from pysip.message.option_tag import OptionTag
 from pysip.message.hdr import Header
 import pytest
 
 
-@pytest.mark.parametrize('opttaglist, expected', [('100rel, timer', set(['100rel', 'timer'])),
-                                                  ('100rel,timer', set(['100rel', 'timer'])),
-                                                  ('100rel', set(['100rel']))
+@pytest.mark.parametrize('opttaglist, expected', [('100rel, timer', {OptionTag('100rel'), OptionTag('timer')}),
+                                                  ('100rel,timer', {OptionTag('100rel'), OptionTag('timer')}),
+                                                  ('100rel', {OptionTag('100rel')})
                                                   ])
 def test_parse(opttaglist, expected):
     hdr = Header('Supported')

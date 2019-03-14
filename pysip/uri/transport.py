@@ -80,6 +80,38 @@ class Transport(object):
         elif transport.known == UNKNOWN:
             return None
 
+    @staticmethod
+    def is_tls(transport):
+        if transport.known == KNOWN:
+            if transport.name in (TCP, UDP, WS):
+                return False
+            elif transport.name in (TLS, WSS):
+                return True
+        raise TransportError(f'Unknown transport')
+
+    def is_datagram(self):
+        if self.name in (UDP, WS, WSS):
+            return True
+        elif self.name in (TCP, TLS):
+            return False
+        else:
+            raise TransportError(f'Cannot decide if transport is datagram: unknown transport {self.name}')
+    '''
+    is_datagram({transport, udp}) ->
+    true;
+is_datagram({transport, ws}) ->
+    true;
+is_datagram({transport, wss}) ->
+    true;
+is_datagram({transport, tls}) ->
+    false;
+is_datagram({transport, tcp}) ->
+    false;
+is_datagram({other_transport, Binary}) when is_binary(Binary) ->
+    error({error, {unknown_transport_type, Binary}}).
+    '''
+
+
 '''
 -spec parse_bin(binary()) -> transport() | {error, {einval, transport}}.
 parse_bin(V) ->

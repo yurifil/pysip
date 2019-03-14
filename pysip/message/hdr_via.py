@@ -72,7 +72,10 @@ class SentBy(object):
             port = f':{self.port}'
         else:
             port = ''
-        return f'{self.host}{port}'
+        host = self.host
+        if isinstance(self.host, IPv6Address):
+            host = f'[{self.host}]'
+        return f'{host}{port}'
 
 
 class ViaHeaderError(PySIPException):
@@ -148,6 +151,12 @@ class ViaHeader(BaseSipHeader):
             ret_val.port = Transport.default_port(self.sent_protocol.transport)
         return ret_val
 
+    @sent_by.setter
+    def sent_by(self, value):
+        if not isinstance(value, SentBy):
+            raise NotImplemented
+        self._sent_by = value
+
     @property
     def branch(self):
         """Branch value.
@@ -155,7 +164,14 @@ class ViaHeader(BaseSipHeader):
         Returns:
             :obj:Branch: Branch parameter. If no branch is specified, None is returned.
         """
-        return self.hparams.find(PARAM_BRANCH)
+        branch = self.hparams.find(PARAM_BRANCH)
+        if isinstance(branch, HParamNotFound):
+            return None
+        return branch
+
+    @branch.setter
+    def branch(self, value):
+        self.hparams.set(PARAM_BRANCH, value, 'Branch', assemble_branch(branch=value))
 
     @property
     def received(self):
@@ -307,6 +323,7 @@ class ViaHeader(BaseSipHeader):
                 host_port, rest = rx_match.group(1).strip(), rx_match.group(2)
             else:
                 host_port, rest = sentby_str.strip(), ''
+            print(f'ViaHeader.parse_sent_by({sentby_str}): hostport {host_port}')
             h, p = ViaHeader.parse_sent_by_host_port(host_port)
             return h, p, rest
         except Exception as e:
@@ -325,6 +342,7 @@ class ViaHeader(BaseSipHeader):
         Raises:
             ViaHeaderError if sentby_str host and port are not rfc compliant.
         """
+        print(f'ViaHeader.parse_sent_by_host_port({host_port})')
         try:
             return PARSER.parse_host(host_port), PARSER.parse_port(host_port)
         except Exception as e:
@@ -459,8 +477,6 @@ class ViaHeader(BaseSipHeader):
         return params_key
 
     def __eq__(self, other):
-        print(f'{self.make_param_key(self.hparams)} {self.make_param_key(other.hparams)}')
-        print(f'{self.make_param_key(self.hparams) == self.make_param_key(other.hparams)}')
         if isinstance(other, ViaHeader):
             return self.sent_protocol == other.sent_protocol and self.sent_by == other.sent_by and \
                    self.make_param_key(self.hparams) == self.make_param_key(other.hparams)
@@ -475,12 +491,12 @@ class ViaHeader(BaseSipHeader):
         hparams_str = self.hparams.assemble()
         if hparams_str:
             hparams_str = f';{hparams_str}'
-        return f'{self.sent_protocol} {self.sent_by}{hparams_str}'
+        ret_val = f'{self.sent_protocol} {self.sent_by}{hparams_str}'
+        return ret_val
 
     def __repr__(self):
         return self.assemble()
 
-    @property
     def has_rport(self):
         """Is RPORT defined in Via header.
 

@@ -176,7 +176,10 @@ class SIPUriParser(object):
 
         """
         if not isinstance(port, int):
-            decoded_port = self._decode_int(port)
+            try:
+                decoded_port = self._decode_int(port)
+            except ValueError:
+                raise PortParseError(f'Cannot decode port "{port}"" to int')
         else:
             decoded_port = port
         if not self.is_valid_port(decoded_port):
@@ -259,7 +262,7 @@ class SIPUriParser(object):
     def validate_host(self, host):
         """
         Args:
-            host:
+            host (str):
 
         Returns:
             str: if host is a valid url,
@@ -395,9 +398,9 @@ class SIPUriParser(object):
         Returns:
             dict: if parameters string is rfc compliant.
         """
-        if not params_str:
-            return None
         params = dict()
+        if not params_str:
+            return params
         for pair in params_str.split(self.SEMICOLON):
             splitted_param_pair = pair.split(self.EQUAL)
             param = splitted_param_pair[0]
@@ -560,7 +563,7 @@ class ParseResult(object):
         self.host = None
         self.port = None
         self.user = None
-        self.params = None
+        self.params = dict()
         self.headers = None
         self._encoding = encoding
         self._errors = 'strict'
@@ -596,7 +599,7 @@ class ParseResult(object):
     def getparams(self):
         params = self.params
         if not params:
-            return None
+            return params
         ret_dict = dict()
         for k, v in params.items():
             key = k

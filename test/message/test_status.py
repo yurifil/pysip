@@ -1,4 +1,5 @@
-from pysip.message.status import response_type, reason_phrase, bad_request_reason
+from pysip.message.status import response_type, reason_phrase
+from pysip.message.sip_message import bad_request_reason, SipHeaderError
 from pysip import FINAL, PROVISIONAL, PySIPException, HeaderError
 import pytest
 import re
@@ -27,9 +28,8 @@ def test_response_type():
 
 def test_reason_phrase():
     def test_phrase(code, text):
-        text_bin = text.encode('utf-8')
         phrase = reason_phrase(code)
-        assert text_bin == phrase
+        assert text == phrase
     test_phrase(100, "Trying")
     test_phrase(404, "Not Found")
     test_phrase(408, "Request Timeout")
@@ -41,5 +41,7 @@ def test_bad_request_reason():
         reason = bad_request_reason(error).lower()
         print(match_text.lower(), reason)
         assert re.search(match_text.lower(), reason)
-    test_bad_request_reason(b"Bad Request", ImportError()),
-    test_bad_request_reason(b"Max-Forwards", HeaderError(header=b'max-forwards'))
+    test_bad_request_reason("Bad Request", ImportError()),
+    error = SipHeaderError()
+    error.set_header('max-forwards')
+    test_bad_request_reason("Max-Forwards", error)

@@ -17,3 +17,14 @@ class OptionTag(object):
         if check_token(tag):
             return tag
         raise OptionTagError(f'Cannot parse tag {tag}: not a token.')
+
+    def __hash__(self):
+        return hash(self.tag)
+
+    def __eq__(self, other):
+        if isinstance(other, OptionTag):
+            return self.tag == other.tag
+        return NotImplemented
+
+    def __repr__(self):
+        return f'OptionTag(tag={self.tag})'

@@ -54,3 +54,6 @@ class MaxForwardsHeader(BaseSipHeader):
         hdr = Header(header_name)
         hdr.add_value(self.assemble())
         return hdr
+
+    def value(self):
+        return self.maxforwards

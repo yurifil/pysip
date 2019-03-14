@@ -112,7 +112,7 @@ class Uri(object):
         return self.__getattribute__(part)
 
     def assemble(self):
-        return self._parsed_uri.geturi()
+        return self.uri
 
     def make_user_key(self):
         if self.user:
@@ -139,8 +139,25 @@ class Uri(object):
     def parsed_uri(self):
         return self._parsed_uri
 
-    def clear_not_allowed_parts(self):
-        raise NotImplementedError
+    # TODO: change ParseResult interface, too much implementations details.
+    def clear_not_allowed_parts(self, modifier):
+        if modifier not in ('ruri', 'record-route'):
+            raise SIPUriError(f'clear_not_allowed_parts: unknown modifier ({modifier})')
+        if self.scheme.lower() not in ('sip', 'sips'):
+            return self
+        if modifier == 'ruri':
+            ret_uri = Uri(self.assemble())
+            if ret_uri._parsed_uri.params is not None:
+                ret_uri._parsed_uri.params.pop('method', None)
+            ret_uri._parsed_uri.headers = dict()
+            return ret_uri
+        if modifier == 'record-route':
+            ret_uri = Uri(self.assemble())
+            if ret_uri._parsed_uri.params is not None:
+                ret_uri._parsed_uri.params.pop('method', None)
+                ret_uri._parsed_uri.params.pop('ttl', None)
+            ret_uri._parsed_uri.headers = dict()
+            return ret_uri
 
     @property
     def params(self):
@@ -170,8 +187,5 @@ class Uri(object):
             uri.__setattr__(decoded_part, value)
         return uri
 
-
-
-
-
-
+    def set_param(self, param, value):
+        self._parsed_uri.params[param] = value
